@@ -73,6 +73,9 @@ class ServiceRuntime:
         self.mode = Mode.OFF
         # A manual Stop pauses auto-direct until the next manual Start.
         self.manually_stopped = False
+        # Set by close(): the runtime was replaced or the hub is exiting, so
+        # nothing may start it again.
+        self._closed = False
         self._task: asyncio.Task | None = None
         self._watcher: asyncio.Task | None = None
         self._wake = asyncio.Event()  # cut a retry back-off short
@@ -97,7 +100,8 @@ class ServiceRuntime:
             self._watcher = asyncio.create_task(self._auto_watch(), name=f"watch:{self.service.id}")
 
     async def close(self) -> None:
-        """Stop everything, including the background probe (shutdown / reload)."""
+        """Stop everything for good, including the background probe (shutdown / reload)."""
+        self._closed = True
         if self._watcher is not None:
             self._watcher.cancel()
             try:
@@ -109,6 +113,8 @@ class ServiceRuntime:
 
     def start(self) -> None:
         """Manual start; also upgrades a running auto-direct service to manual."""
+        if self._closed:
+            return
         self.manually_stopped = False
         if self.mode is Mode.AUTO:
             self.log("now kept up manually (ssh fallback enabled)")
@@ -144,6 +150,8 @@ class ServiceRuntime:
 
     async def ensure_up(self, timeout: float) -> bool:
         """Start the service if needed and wait for the outcome of an attempt."""
+        if self._closed:
+            return False
         self.start()
         if self.state is State.UP:
             return True
@@ -195,19 +203,25 @@ class ServiceRuntime:
     # Supervisor loop
 
     def _launch(self, mode: Mode) -> None:
+        if self._closed:
+            return
         self.mode = mode
         if self._task is None or self._task.done():
             self._task = asyncio.create_task(self._supervise(), name=f"service:{self.service.id}")
         else:
+            # The running supervisor picks up the new mode. If it is already
+            # winding down, its `finally` block starts a fresh one.
             self._wake.set()
 
     async def _halt(self, reason: str) -> None:
         self.mode = Mode.OFF
         self._request_down(reason)
         self._wake.set()
-        if self._task is not None:
-            await self._task
-            self._task = None
+        # Wait for the supervisor to finish. The latest command wins: if a
+        # start() arrives meanwhile, the service keeps running and this stop
+        # has nothing left to wait for.
+        while self.mode is Mode.OFF and self._task is not None and not self._task.done():
+            await asyncio.wait({self._task}, timeout=0.1)
 
     async def _auto_watch(self) -> None:
         """Bring the service up via direct whenever a direct route is reachable."""
@@ -294,7 +308,7 @@ class ServiceRuntime:
             self.active_route = None
             await self._set_state(State.OFF, attempt_finished=True)
             # start() may have been called while we were shutting down.
-            if self.mode is not Mode.OFF:
+            if self.mode is not Mode.OFF and not self._closed:
                 self._task = asyncio.create_task(self._supervise(), name=f"service:{self.service.id}")
 
     def _go_idle(self, reason: str) -> None:

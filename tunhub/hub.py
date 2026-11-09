@@ -18,6 +18,9 @@ class Hub:
         self.config_dir = config_dir
         self.icons = IconStore(config_dir, cache_dir)
         self._background: set[asyncio.Task] = set()
+        # Reload and shutdown replace runtimes; running two at once would leave
+        # an orphaned runtime holding a port.
+        self._lifecycle_lock = asyncio.Lock()
         self.config: Config = load_config(config_dir)
         # The listening address is fixed for the process lifetime.
         self.hub_settings: HubSettings = self.config.hub
@@ -54,15 +57,20 @@ class Hub:
         return [runtime.service.id for runtime in targets]
 
     async def shutdown(self) -> None:
-        for task in self._background:
-            task.cancel()
-        await asyncio.gather(*(runtime.close() for runtime in self.runtimes.values()))
+        async with self._lifecycle_lock:
+            for task in self._background:
+                task.cancel()
+            await asyncio.gather(*(runtime.close() for runtime in self.runtimes.values()))
 
     async def reload(self) -> list[str]:
         """Reload config files; unchanged services keep their tunnels running.
 
         Raises ConfigError (and keeps the old config) if the new files are invalid.
         """
+        async with self._lifecycle_lock:
+            return await self._reload()
+
+    async def _reload(self) -> list[str]:
         new_config = load_config(self.config_dir)
         messages: list[str] = []
         if new_config.hub != self.hub_settings:
