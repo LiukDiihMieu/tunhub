@@ -7,7 +7,7 @@ name = "tunhub"
 dynamic = ["version"]
 description = "One local dashboard for your SSH-tunnelled and LAN services: bookmark once, open from anywhere."
 readme = "README.md"
-license = "MIT"
+license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
 authors = [{ name = "Liuk Diih Mieu" }]
 requires-python = ">=3.10"
