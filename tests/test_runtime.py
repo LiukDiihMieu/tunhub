@@ -156,3 +156,34 @@ def test_busy_local_port_is_reported():
         blocker.close()
 
     run(scenario())
+
+
+def test_teardown_waits_until_port_is_released():
+    """Simulates Windows: the port stays busy briefly after ssh was terminated."""
+    import socket
+    import threading
+
+    async def scenario():
+        _, target = await start_echo_server()
+        runtime = make_runtime({"type": "tcp", "local_port": free_port(),
+                                "routes": [{"direct": f"127.0.0.1:{target}"}, {"ssh": "lab", "remote": target}]})
+        runtime.set_pinned_route(1)
+        assert await runtime.ensure_up(10)
+
+        process = runtime._ssh
+        real_stop = process.stop
+
+        def stop_but_linger():
+            real_stop()
+            blocker = socket.socket()
+            blocker.bind(("127.0.0.1", runtime.service.local_port))
+            blocker.listen()
+            threading.Timer(0.5, blocker.close).start()
+
+        process.stop = stop_but_linger
+        runtime.set_pinned_route(None)
+        await wait_until(lambda: runtime.state is State.UP and runtime.active_route == 0, runtime=runtime)
+        assert not any("route #1 failed" in message for _, message in runtime.logs)
+        await runtime.stop()
+
+    run(scenario())

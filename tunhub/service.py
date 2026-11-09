@@ -29,6 +29,7 @@ LOCAL_HOST = "127.0.0.1"
 INITIAL_BACKOFF = 2.0
 MAX_BACKOFF = 60.0
 RECONNECT_DELAY = 1.0
+PORT_RELEASE_TIMEOUT = 3.0
 
 
 class State(str, Enum):
@@ -453,6 +454,24 @@ class ServiceRuntime:
         if self._ssh is not None:
             await asyncio.to_thread(self._ssh.stop)
             self._ssh = None
+            await self._wait_port_released()
+
+    async def _wait_port_released(self, timeout: float = PORT_RELEASE_TIMEOUT) -> None:
+        """Wait until the local port can be bound again.
+
+        On Windows a terminated process may hold its listening socket for a few
+        hundred milliseconds; trying the next route meanwhile would fail with
+        "address in use" and wrongly fall back to a lower-priority route.
+        """
+        deadline = time.monotonic() + timeout
+        while True:
+            try:
+                ensure_port_free(LOCAL_HOST, self.service.local_port)
+                return
+            except OSError:
+                if time.monotonic() > deadline:
+                    return  # the next bind reports the problem
+                await asyncio.sleep(0.1)
 
     def _port_busy_message(self, exc: OSError) -> str:
         return (
