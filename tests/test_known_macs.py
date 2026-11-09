@@ -355,7 +355,12 @@ def test_relay_forwards_to_the_verified_ip_not_the_host_name(tmp_path):
     # that was checked against known_macs.
     async def scenario():
         _, target = await start_echo_server()
-        config = make_config({"svc": {"type": "tcp", "local_port": free_port(), "routes": [{"direct": f"localhost:{target}"}]}})
+        # Windows tries ::1 first and needs ~2 s to report a refused loopback
+        # connection before falling back to 127.0.0.1, hence the long probe.
+        config = make_config(
+            {"svc": {"type": "tcp", "local_port": free_port(), "routes": [{"direct": f"localhost:{target}"}]}},
+            probe_timeout=5,
+        )
         runtime = ServiceRuntime(config.services["svc"], config.tunnel)
         runtime.guard = make_guard(tmp_path, {"127.0.0.1": NAS_MAC})
         runtime.start()
