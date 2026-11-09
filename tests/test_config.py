@@ -100,3 +100,96 @@ def test_ssh_command_user_options_come_first():
     assert argv[-3:] == ["-L", "127.0.0.1:13389:[::1]:3390", "lab"]
     # ssh honours the first value of an option, so the user's choice must precede ours.
     assert argv.index("BatchMode=no") < argv.index("BatchMode=yes")
+
+
+@pytest.mark.parametrize(
+    "raw, problem",
+    [
+        ({"services": ["oops"]}, "services: expected a mapping"),
+        ({"hub": 5}, "hub: expected a mapping"),
+        ({"tunnel": ["x"]}, "tunnel: expected a mapping"),
+        ({"tunnel": {"ssh_options": ["x"]}}, "tunnel.ssh_options: expected a mapping"),
+        ({"hub": {"open_timeout": "oops"}}, "hub.open_timeout: expected a number"),
+        ({"tunnel": {"auto_direct_interval": -1}}, "tunnel.auto_direct_interval: must be a positive"),
+        ({"tunnel": {"probe_timeout": 0}}, "tunnel.probe_timeout: must be a positive"),
+        ({"tunnel": {"ready_timeout": float("inf")}}, "tunnel.ready_timeout: must be a positive"),
+        ({"tunnel": {"auto_direct": "false"}}, "tunnel.auto_direct: expected true or false"),
+        ({"services": {"dsm": {**BASE_SERVICE, "autostart": "false"}}}, "autostart: expected true or false"),
+        ({"services": {"dsm": {**BASE_SERVICE, "enabled": "false"}}}, "enabled: expected true or false"),
+        ({"services": {"dsm": {**BASE_SERVICE, "local_port": True}}}, "invalid port True"),
+        ({"tunnel": {"ssh_command": 42}}, "tunnel.ssh_command: expected a string"),
+        ({"hub": {"port": float("inf")}}, "hub.port: invalid port inf"),
+        ({"hub": {"port": 8765.7}}, "hub.port: invalid port 8765.7"),  # used to become 8765
+    ],
+)
+def test_malformed_config_raises_config_error(raw, problem):
+    # Anything but ConfigError would crash `tunhub run` or make reload return 500.
+    with pytest.raises(ConfigError, match=problem):
+        parse_config(raw)
+
+
+BAD_VALUES = [42, -1, 1.5, float("inf"), float("nan"), "oops", "", [], ["x"], {}, {"a": 1}, True, False, None]
+VALID = {
+    "hub": {"listen": "127.0.0.1", "port": 8765, "hostname": "hub.localhost", "open_timeout": 40},
+    "tunnel": {
+        "ssh_command": "ssh",
+        "ssh_options": {"ServerAliveInterval": 15},
+        "probe_timeout": 0.8,
+        "ready_timeout": 15,
+        "health_timeout": 8,
+        "auto_direct": True,
+        "auto_direct_interval": 15,
+    },
+    "services": {
+        "nas": {
+            "name": "NAS",
+            "type": "http",
+            "local_port": 15000,
+            "hostname": "nas.localhost",
+            "path": "/",
+            "autostart": False,
+            "health_check": True,
+            "description": "",
+            "auto_direct": True,
+            "icon": "nas.png",
+            "enabled": True,
+            "routes": [
+                {"direct": "192.168.1.10:5000", "label": "home"},
+                {"ssh": "nas", "remote": "127.0.0.1:5000", "label": "ssh"},
+            ],
+        }
+    },
+}
+
+
+def _key_paths(node, prefix=()):
+    """Every path in VALID, e.g. ('services', 'nas', 'routes', 1, 'remote')."""
+    items = node.items() if isinstance(node, dict) else enumerate(node)
+    for key, value in items:
+        yield prefix + (key,)
+        if isinstance(value, (dict, list)):
+            yield from _key_paths(value, prefix + (key,))
+
+
+def _replaced(path, value):
+    import copy
+
+    raw = copy.deepcopy(VALID)
+    node = raw
+    for key in path[:-1]:
+        node = node[key]
+    node[path[-1]] = value
+    return raw
+
+
+@pytest.mark.parametrize("path", list(_key_paths(VALID)), ids=lambda p: ".".join(map(str, p)))
+def test_any_bad_value_is_accepted_or_raises_config_error(path):
+    # Whatever the user writes, tunhub must either accept it or report a
+    # ConfigError; any other exception crashes startup or fails a reload with 500.
+    for value in BAD_VALUES:
+        try:
+            parse_config(_replaced(path, value))
+        except ConfigError:
+            pass
+        except Exception as exc:  # noqa: BLE001
+            pytest.fail(f"{'.'.join(map(str, path))} = {value!r} raised {type(exc).__name__}: {exc}")

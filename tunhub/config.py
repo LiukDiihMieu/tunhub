@@ -143,18 +143,18 @@ def load_config(config_dir: Path) -> Config:
 
 
 def parse_config(raw: dict[str, Any]) -> Config:
-    hub = _parse_hub(raw.get("hub") or {})
-    tunnel_raw = raw.get("tunnel") or {}
+    hub = _parse_hub(_mapping(raw.get("hub"), "hub"))
+    tunnel_raw = _mapping(raw.get("tunnel"), "tunnel")
     tunnel = _parse_tunnel(tunnel_raw)
-    auto_direct_default = bool(tunnel_raw.get("auto_direct", True))
+    auto_direct_default = _flag(tunnel_raw, "auto_direct", True, "tunnel")
 
     services: dict[str, Service] = {}
-    for service_id, body in (raw.get("services") or {}).items():
+    for service_id, body in _mapping(raw.get("services"), "services").items():
         service_id = str(service_id)
         body = body or {}
         if not isinstance(body, dict):
             raise ConfigError(f"service '{service_id}': expected a mapping")
-        if body.get("enabled", True) is False:
+        if not _flag(body, "enabled", True, f"service '{service_id}'"):
             continue
         services[service_id] = _parse_service(service_id, body, auto_direct_default)
 
@@ -205,7 +205,7 @@ def _parse_hub(raw: dict[str, Any]) -> HubSettings:
         listen_host=str(raw.get("listen", "127.0.0.1")),
         port=_check_port(raw.get("port", 8765), "hub.port"),
         hostname=str(raw.get("hostname", "hub.localhost")).lower(),
-        open_timeout=float(raw.get("open_timeout", 40)),
+        open_timeout=_seconds(raw, "open_timeout", 40, "hub"),
     )
 
 
@@ -213,20 +213,20 @@ def _parse_tunnel(raw: dict[str, Any]) -> TunnelSettings:
     command = raw.get("ssh_command", "ssh")
     if isinstance(command, str):
         command = [command]
-    if not command or not all(isinstance(part, str) for part in command):
+    if not isinstance(command, list) or not command or not all(isinstance(part, str) for part in command):
         raise ConfigError("tunnel.ssh_command: expected a string or a list of strings")
 
     options = dict(DEFAULT_SSH_OPTIONS)
-    for key, value in (raw.get("ssh_options") or {}).items():
+    for key, value in _mapping(raw.get("ssh_options"), "tunnel.ssh_options").items():
         options[str(key)] = _ssh_option_value(value)
 
     return TunnelSettings(
         ssh_command=tuple(command),
         ssh_options=tuple(options.items()),
-        probe_timeout=float(raw.get("probe_timeout", 0.8)),
-        ready_timeout=float(raw.get("ready_timeout", 15)),
-        health_timeout=float(raw.get("health_timeout", 8)),
-        auto_direct_interval=float(raw.get("auto_direct_interval", 15)),
+        probe_timeout=_seconds(raw, "probe_timeout", 0.8, "tunnel"),
+        ready_timeout=_seconds(raw, "ready_timeout", 15, "tunnel"),
+        health_timeout=_seconds(raw, "health_timeout", 8, "tunnel"),
+        auto_direct_interval=_seconds(raw, "auto_direct_interval", 15, "tunnel"),
     )
 
 
@@ -261,11 +261,11 @@ def _parse_service(service_id: str, body: dict[str, Any], auto_direct_default: b
         local_port=local_port,
         hostname=str(body.get("hostname", f"{service_id}.localhost")).lower(),
         path=path,
-        autostart=bool(body.get("autostart", False)),
-        health_check=bool(body.get("health_check", service_type != "tcp")),
+        autostart=_flag(body, "autostart", False, where),
+        health_check=_flag(body, "health_check", service_type != "tcp", where),
         routes=routes,
         description=str(body.get("description", "")),
-        auto_direct=bool(body.get("auto_direct", auto_direct_default)),
+        auto_direct=_flag(body, "auto_direct", auto_direct_default, where),
         icon=str(body["icon"]) if body.get("icon") else None,
     )
 
@@ -315,11 +315,45 @@ def _read_yaml(path: Path) -> dict[str, Any]:
     return data
 
 
-def _check_port(value: Any, where: str) -> int:
+def _mapping(value: Any, where: str) -> dict[str, Any]:
+    """A YAML mapping; a missing or empty section counts as an empty one."""
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ConfigError(f"{where}: expected a mapping, got {type(value).__name__}")
+    return value
+
+
+def _seconds(raw: dict[str, Any], key: str, default: float, where: str) -> float:
+    """A positive duration in seconds."""
+    value = raw.get(key, default)
+    if isinstance(value, bool):  # bool is an int subclass; reject `true`
+        value = None
     try:
-        port = int(value)
+        seconds = float(value)
     except (TypeError, ValueError):
-        raise ConfigError(f"{where}: invalid port {value!r}") from None
+        raise ConfigError(f"{where}.{key}: expected a number of seconds, got {value!r}") from None
+    if not 0 < seconds < float("inf"):
+        raise ConfigError(f"{where}.{key}: must be a positive number of seconds, got {seconds}")
+    return seconds
+
+
+def _flag(raw: dict[str, Any], key: str, default: bool, where: str) -> bool:
+    """A true/false value; strings such as "false" are rejected, not read as true."""
+    value = raw.get(key, default)
+    if not isinstance(value, bool):
+        raise ConfigError(f"{where}.{key}: expected true or false, got {value!r}")
+    return value
+
+
+def _check_port(value: Any, where: str) -> int:
+    # Only whole numbers: int() would silently truncate 8765.7 and overflow on inf.
+    if isinstance(value, int) and not isinstance(value, bool):
+        port = value
+    elif isinstance(value, str) and value.strip().isdigit():
+        port = int(value)
+    else:
+        raise ConfigError(f"{where}: invalid port {value!r}")
     if not 1 <= port <= 65535:
         raise ConfigError(f"{where}: port {port} out of range")
     return port
