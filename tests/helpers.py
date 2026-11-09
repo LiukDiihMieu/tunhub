@@ -10,10 +10,22 @@ from tunhub.config import parse_config
 FAKE_SSH = str(Path(__file__).with_name("fake_ssh.py"))
 
 
+_handed_out_ports: set[int] = set()
+
+
 def free_port() -> int:
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
+    """Return a free local port that no earlier call in this test run returned.
+
+    The OS may hand out the same ephemeral port twice in a row once the probing
+    socket is closed, so two "free" ports picked for one config could collide.
+    """
+    while True:
+        with socket.socket() as sock:
+            sock.bind(("127.0.0.1", 0))
+            port = sock.getsockname()[1]
+        if port not in _handed_out_ports:
+            _handed_out_ports.add(port)
+            return port
 
 
 def make_config(services: dict, **tunnel):
