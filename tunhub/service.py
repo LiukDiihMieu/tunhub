@@ -20,7 +20,7 @@ from enum import Enum
 from typing import Callable
 
 from .config import Route, Service, TunnelSettings
-from .known_macs import MacGuard
+from .known_macs import MacGuard, Verdict
 from .net import TcpRelay, ensure_port_free, http_probe, is_port_open, probe_tcp
 from .ssh import SshProcess, build_ssh_command
 
@@ -232,11 +232,15 @@ class ServiceRuntime:
     async def _auto_watch(self) -> None:
         """Bring the service up via direct whenever a direct route is reachable."""
         while True:
-            # Check again after the probe: a Stop or Start may have arrived
-            # while it was running, and the user's command must win.
-            if self._may_auto_start() and await self._direct_reachable() and self._may_auto_start():
-                self.log("direct route reachable, connecting automatically")
-                self._launch(Mode.AUTO)
+            try:
+                # Check again after the probe: a Stop or Start may have arrived
+                # while it was running, and the user's command must win.
+                if self._may_auto_start() and await self._direct_reachable() and self._may_auto_start():
+                    self.log("direct route reachable, connecting automatically")
+                    self._launch(Mode.AUTO)
+            except Exception as exc:  # keep probing; one bad round must not end auto-direct
+                logger.exception("[%s] auto-direct probe failed", self.service.id)
+                self.log(f"auto-direct probe failed: {exc}")
             await asyncio.sleep(self.settings.auto_direct_interval)
 
     def _may_auto_start(self) -> bool:
@@ -266,9 +270,10 @@ class ServiceRuntime:
         """
         if self.state is not State.UP or self._relay is None or self.active_route is None:
             return
-        route = self.service.routes[self.active_route]
+        relay = self._relay
         try:
-            ip = await probe_tcp(route.target_host, route.target_port, self.settings.probe_timeout)
+            # The address the relay actually forwards to (pinned at bring-up).
+            ip = await probe_tcp(relay.target_host, relay.target_port, self.settings.probe_timeout)
         except (OSError, asyncio.TimeoutError):
             self._request_down("direct target unreachable after a network change")
             return
@@ -279,7 +284,11 @@ class ServiceRuntime:
         """None if the direct target ``ip`` may be used, else why not."""
         if self.guard is None:
             return None
-        verdict = await self.guard.check(ip)
+        try:
+            verdict = await self.guard.check(ip)
+        except Exception as exc:  # an unexpected failure must not crash the supervisor
+            logger.exception("[%s] known_macs check failed", self.service.id)
+            verdict = Verdict(False, f"cannot check {ip} against known_macs: {exc}")
         if verdict.note and verdict.note != self._last_identity_note:
             self.log(verdict.note)  # once per change, not on every 15 s probe
         self._last_identity_note = verdict.note
@@ -432,10 +441,12 @@ class ServiceRuntime:
         if await self._identity_problem(ip) is not None:
             raise RouteFailed(f"{route.target} is not the machine recorded in known_macs (see above)")
 
+        # Forward to the IP that was just verified, not to route.target_host:
+        # a host name could resolve to another machine on a later connection.
         relay = TcpRelay(
             LOCAL_HOST,
             self.service.local_port,
-            route.target_host,
+            ip,
             route.target_port,
             connect_timeout=max(3.0, self.settings.probe_timeout * 3),
             on_connect_error=self._on_relay_error,

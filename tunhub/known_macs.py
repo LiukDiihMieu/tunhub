@@ -141,7 +141,11 @@ class MacGuard:
         if self.skip_loopback and ipaddress.ip_address(ip).is_loopback:
             return Verdict(True)  # e.g. local.yaml on the server itself
         mac = await asyncio.to_thread(self.lookup, ip)
-        entries = self.known.lookup(ip)
+        try:
+            entries = self.known.lookup(ip)
+        except (OSError, ValueError) as exc:  # unreadable, or not UTF-8
+            # Without the records the target cannot be confirmed: skip direct.
+            return Verdict(False, f"cannot read {self.known.path} ({exc}); direct route to {ip} skipped")
         where = ", ".join(f"{entry.mac} (line {entry.line})" for entry in entries)
 
         if mac is None:
@@ -150,7 +154,13 @@ class MacGuard:
                                       f"but {FILE_NAME} expects {where}")
             return Verdict(True, f"cannot verify {ip} (no next-hop MAC, e.g. through a VPN); using it anyway")
         if not entries:
-            self.known.add(ip, mac)
+            try:
+                self.known.add(ip, mac)
+            except OSError as exc:
+                # First use is trusted anyway (accept-new); failing to record
+                # it only means the next connection counts as first use again.
+                return Verdict(True, f"could not record {ip} ({mac}) in {self.known.path} ({exc}); "
+                                     "using it without a record")
             return Verdict(True, f"Permanently added {ip} ({mac}) to {FILE_NAME}")
         if any(entry.mac == mac for entry in entries):
             return Verdict(True)
