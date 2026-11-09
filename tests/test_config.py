@@ -128,7 +128,7 @@ def test_malformed_config_raises_config_error(raw, problem):
         parse_config(raw)
 
 
-BAD_VALUES = [42, -1, 1.5, float("inf"), float("nan"), "oops", "", [], ["x"], {}, {"a": 1}, True, False, None]
+BAD_VALUES = [42, -1, 1.5, float("inf"), float("nan"), "oops", "", "²", "５０００", [], ["x"], {}, {"a": 1}, True, False, None]
 VALID = {
     "hub": {"listen": "127.0.0.1", "port": 8765, "hostname": "hub.localhost", "open_timeout": 40},
     "tunnel": {
@@ -193,3 +193,57 @@ def test_any_bad_value_is_accepted_or_raises_config_error(path):
             pass
         except Exception as exc:  # noqa: BLE001
             pytest.fail(f"{'.'.join(map(str, path))} = {value!r} raised {type(exc).__name__}: {exc}")
+
+
+# Every place a port is written, through one rule (_check_port).
+PORT_PATHS = {
+    "hub.port": lambda port: parse_config({"hub": {"port": port}}).hub.port,
+    "local_port": lambda port: parse_config({"services": {"s": {**BASE_SERVICE, "local_port": port}}})
+    .services["s"].local_port,
+    "direct host:port": lambda port: parse_endpoint(f"192.168.1.10:{port}", "r")[1],
+    "remote bare port": lambda port: parse_endpoint(port, "r", default_host="127.0.0.1")[1],
+    "remote [v6]:port": lambda port: parse_endpoint(f"[::1]:{port}", "r")[1],
+}
+
+
+@pytest.mark.parametrize("port", ["²", "５０００", "٥٠٠٠", "5000.0", "-1", "0", "65536", "50 00"])
+@pytest.mark.parametrize("path", PORT_PATHS)
+def test_invalid_port_is_rejected_on_every_path(path, port):
+    # '²' used to crash (str.isdigit() accepts it, int() does not), and
+    # full-width digits were accepted on some paths but not others.
+    with pytest.raises(ConfigError):
+        PORT_PATHS[path](port)
+
+
+@pytest.mark.parametrize("path", PORT_PATHS)
+def test_valid_port_is_accepted_on_every_path(path):
+    assert PORT_PATHS[path]("5000") == 5000
+
+
+@pytest.mark.parametrize("body", [False, 0, [], ""])
+def test_service_body_must_be_a_mapping(body):
+    # Used to become {} and then report "local_port is required".
+    with pytest.raises(ConfigError, match="service 'nas': expected a mapping"):
+        parse_config({"services": {"nas": body}})
+
+
+def test_null_service_body_still_means_empty_mapping():
+    with pytest.raises(ConfigError, match="local_port is required"):
+        parse_config({"services": {"nas": None}})
+
+
+@pytest.mark.parametrize("content", ["false", "0", "[]", '""', "- a"])
+@pytest.mark.parametrize("file_name", ["services.yaml", "local.yaml"])
+def test_config_file_top_level_must_be_a_mapping(tmp_path, file_name, content):
+    # Used to be read as an empty config, so a broken local.yaml was ignored.
+    (tmp_path / "services.yaml").write_text("services: {}\n")
+    (tmp_path / file_name).write_text(content + "\n")
+    with pytest.raises(ConfigError, match="top level: expected a mapping"):
+        load_config(tmp_path)
+
+
+@pytest.mark.parametrize("file_name", ["services.yaml", "local.yaml"])
+def test_empty_config_file_is_an_empty_mapping(tmp_path, file_name):
+    (tmp_path / "services.yaml").write_text("services: {}\n")
+    (tmp_path / file_name).write_text("# only a comment\n")
+    assert load_config(tmp_path).services == {}

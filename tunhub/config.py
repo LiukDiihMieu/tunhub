@@ -151,9 +151,7 @@ def parse_config(raw: dict[str, Any]) -> Config:
     services: dict[str, Service] = {}
     for service_id, body in _mapping(raw.get("services"), "services").items():
         service_id = str(service_id)
-        body = body or {}
-        if not isinstance(body, dict):
-            raise ConfigError(f"service '{service_id}': expected a mapping")
+        body = _mapping(body, f"service '{service_id}'")
         if not _flag(body, "enabled", True, f"service '{service_id}'"):
             continue
         services[service_id] = _parse_service(service_id, body, auto_direct_default)
@@ -174,22 +172,22 @@ def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]
 
 
 def parse_endpoint(value: Any, where: str, default_host: str | None = None) -> tuple[str, int]:
-    """Parse ``host:port``, ``[v6]:port`` or a bare port into (host, port)."""
-    if isinstance(value, int):
+    """Parse ``host:port``, ``[v6]:port`` or a bare port into (host, port).
+
+    This only splits off the host; _check_port() alone decides what a valid
+    port is.
+    """
+    if not (isinstance(value, str) and ":" in value):  # no host given
         if default_host is None:
-            raise ConfigError(f"{where}: expected 'host:port', got bare port {value}")
+            raise ConfigError(f"{where}: expected 'host:port', got {value!r}")
         return default_host, _check_port(value, where)
 
-    text = str(value).strip()
-    if text.isdigit():
-        return parse_endpoint(int(text), where, default_host)
-
-    match = re.fullmatch(r"\[([^\]]+)\]:(\d+)|([^:\s]+):(\d+)", text)
+    text = value.strip()
+    match = re.fullmatch(r"\[([^\]]+)\]:(\S+)|([^:\s]+):(\S+)", text)
     if not match:
         raise ConfigError(f"{where}: cannot parse endpoint '{text}' (expected host:port)")
     host = match.group(1) or match.group(3)
-    port = int(match.group(2) or match.group(4))
-    return host, _check_port(port, where)
+    return host, _check_port(match.group(2) or match.group(4), where)
 
 
 def format_endpoint(host: str, port: int) -> str:
@@ -247,7 +245,7 @@ def _parse_service(service_id: str, body: dict[str, Any], auto_direct_default: b
     if not path.startswith("/"):
         path = "/" + path
 
-    raw_routes = body.get("routes") or []
+    raw_routes = body.get("routes")
     if not isinstance(raw_routes, list) or not raw_routes:
         raise ConfigError(f"{where}: routes must be a non-empty list")
     routes = tuple(
@@ -307,16 +305,15 @@ def _check_port_conflicts(hub: HubSettings, services: dict[str, Service]) -> Non
 
 def _read_yaml(path: Path) -> dict[str, Any]:
     try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
     except yaml.YAMLError as exc:
         raise ConfigError(f"{path}: invalid YAML: {exc}") from exc
-    if not isinstance(data, dict):
-        raise ConfigError(f"{path}: top level must be a mapping")
-    return data
+    return _mapping(data, f"{path}: top level")  # an empty file is an empty mapping
 
 
 def _mapping(value: Any, where: str) -> dict[str, Any]:
-    """A YAML mapping; a missing or empty section counts as an empty one."""
+    """A YAML mapping. Only null (a missing or empty section) counts as empty;
+    anything else that is not a mapping, such as false, 0 or [], is an error."""
     if value is None:
         return {}
     if not isinstance(value, dict):
@@ -347,10 +344,14 @@ def _flag(raw: dict[str, Any], key: str, default: bool, where: str) -> bool:
 
 
 def _check_port(value: Any, where: str) -> int:
-    # Only whole numbers: int() would silently truncate 8765.7 and overflow on inf.
+    """The one rule for ports: an int, or a string of ASCII digits, in 1-65535.
+
+    Not int(): it truncates 8765.7 and overflows on inf. Not str.isdigit():
+    it accepts '²' (which int() then rejects) and other non-ASCII digits.
+    """
     if isinstance(value, int) and not isinstance(value, bool):
         port = value
-    elif isinstance(value, str) and value.strip().isdigit():
+    elif isinstance(value, str) and re.fullmatch(r"[0-9]+", value.strip()):
         port = int(value)
     else:
         raise ConfigError(f"{where}: invalid port {value!r}")
