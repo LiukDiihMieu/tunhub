@@ -1,5 +1,6 @@
 """HTTP layer tests: host guard, CSRF guard, /open redirect, reload."""
 
+import json
 import socket
 import sys
 import threading
@@ -49,7 +50,7 @@ def setup(tmp_path, http_target):
         (tmp_path / "services.yaml").write_text(
             f"""
 hub: {{port: {hub_port}}}
-tunnel: {{ssh_command: ["{sys.executable}", "{FAKE_SSH}"], probe_timeout: 0.5}}
+tunnel: {{ssh_command: {json.dumps([sys.executable, FAKE_SSH])}, probe_timeout: 0.5}}
 services:
   web:
     name: Web

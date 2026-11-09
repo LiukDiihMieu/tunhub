@@ -32,7 +32,9 @@ def test_relay_roundtrip_and_connect_error():
         assert await reader.read() == b""  # relay closes the client side
         writer.close()
         await relay.stop()
-        assert errors and isinstance(errors[0], OSError)
+        # Windows reports a refused loopback connect only after ~2 s, so it may time out
+        # instead; on Python 3.10 asyncio.TimeoutError is not an OSError.
+        assert errors and isinstance(errors[0], (OSError, asyncio.TimeoutError))
 
     run(scenario())
 
