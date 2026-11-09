@@ -79,7 +79,7 @@ def test_ssh_reconnects_after_process_dies():
         first_pid = runtime._ssh.pid
         runtime._ssh._proc.kill()
 
-        await wait_until(lambda: runtime.state is State.UP and runtime._ssh and runtime._ssh.pid != first_pid)
+        await wait_until(lambda: runtime.state is State.UP and runtime._ssh and runtime._ssh.pid != first_pid, runtime=runtime)
         assert await roundtrip(runtime.service.local_port, b"again") == b"again"
         assert any("route down: ssh exited" in m for _, m in runtime.logs)
         await runtime.stop()
@@ -113,7 +113,7 @@ def test_pinned_route_skips_auto_selection():
         assert runtime.active_route == 1
 
         runtime.set_pinned_route(None)  # back to auto -> re-detects -> direct
-        await wait_until(lambda: runtime.state is State.UP and runtime.active_route == 0)
+        await wait_until(lambda: runtime.state is State.UP and runtime.active_route == 0, runtime=runtime)
         await runtime.stop()
 
     run(scenario())

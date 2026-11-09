@@ -40,19 +40,19 @@ def test_comes_up_automatically_and_goes_idle_without_ssh():
         runtime = make_runtime([{"direct": f"127.0.0.1:{target}"}, {"ssh": "lab", "remote": target}])
         runtime.activate()
 
-        await wait_until(lambda: runtime.state is State.UP)
+        await wait_until(lambda: runtime.state is State.UP, runtime=runtime)
         assert runtime.mode is Mode.AUTO and runtime.active_route == 0
         assert await roundtrip(runtime.service.local_port, b"hi") == b"hi"
 
         await kill_target(server, runtime)
-        await wait_until(lambda: runtime.state is State.OFF)
+        await wait_until(lambda: runtime.state is State.OFF, runtime=runtime)
         await asyncio.sleep(0.5)  # several probe intervals
         assert runtime.state is State.OFF and runtime._ssh is None  # never fell back to ssh
         assert runtime.last_error is None
 
         # Target comes back ("arrived home") -> auto-connects again.
         server, _ = await start_echo_server(target)
-        await wait_until(lambda: runtime.state is State.UP)
+        await wait_until(lambda: runtime.state is State.UP, runtime=runtime)
         assert runtime.mode is Mode.AUTO
         await runtime.close()
         server.close()
@@ -65,14 +65,14 @@ def test_manual_stop_pauses_auto_until_manual_start():
         _, target = await start_echo_server()
         runtime = make_runtime([{"direct": f"127.0.0.1:{target}"}])
         runtime.activate()
-        await wait_until(lambda: runtime.state is State.UP)
+        await wait_until(lambda: runtime.state is State.UP, runtime=runtime)
 
         await runtime.stop()
         await asyncio.sleep(0.6)
         assert runtime.state is State.OFF and runtime.snapshot()["auto_paused"]
 
         runtime.start()
-        await wait_until(lambda: runtime.state is State.UP)
+        await wait_until(lambda: runtime.state is State.UP, runtime=runtime)
         assert runtime.mode is Mode.MANUAL and not runtime.manually_stopped
         await runtime.close()
 
@@ -85,13 +85,13 @@ def test_open_upgrades_auto_to_manual_with_ssh_fallback():
         _, ssh_target = await start_echo_server()
         runtime = make_runtime([{"direct": f"127.0.0.1:{target}"}, {"ssh": "lab", "remote": ssh_target}])
         runtime.activate()
-        await wait_until(lambda: runtime.state is State.UP)
+        await wait_until(lambda: runtime.state is State.UP, runtime=runtime)
 
         assert await runtime.ensure_up(5)  # like clicking Open
         assert runtime.mode is Mode.MANUAL
 
         await kill_target(server, runtime)
-        await wait_until(lambda: runtime.state is State.UP and runtime.active_route == 1)
+        await wait_until(lambda: runtime.state is State.UP and runtime.active_route == 1, runtime=runtime)
         await runtime.close()
 
     run(scenario())
@@ -149,7 +149,7 @@ services:
         await hub.start()
         direct, tunnel = hub.get("direct"), hub.get("tunnel")
         assert await tunnel.ensure_up(10) and tunnel.uses_ssh
-        await wait_until(lambda: direct.state is State.UP)
+        await wait_until(lambda: direct.state is State.UP, runtime=direct)
         assert not direct.uses_ssh
 
         assert await hub.disconnect_ssh() == ["tunnel"]

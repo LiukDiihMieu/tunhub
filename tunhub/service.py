@@ -284,6 +284,10 @@ class ServiceRuntime:
             logger.exception("[%s] supervisor crashed", self.service.id)
             self.last_error = f"internal error: {exc}"
             self.mode = Mode.OFF
+        except BaseException:
+            # Cancelled (e.g. the event loop is shutting down): do not relaunch.
+            self.mode = Mode.OFF
+            raise
         finally:
             await self._teardown()
             self.active_route = None

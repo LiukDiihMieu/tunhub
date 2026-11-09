@@ -60,10 +60,15 @@ async def roundtrip(port: int, payload: bytes) -> bytes:
     return data
 
 
-async def wait_until(predicate, timeout: float = 10) -> None:
+async def wait_until(predicate, timeout: float = 10, runtime=None) -> None:
+    """Poll predicate; on timeout, include the runtime's log to ease debugging (CI)."""
     loop = asyncio.get_running_loop()
     deadline = loop.time() + timeout
     while not predicate():
         if loop.time() > deadline:
-            raise AssertionError("condition not reached in time")
+            detail = ""
+            if runtime is not None:
+                start = runtime.logs[0][0] if runtime.logs else 0
+                detail = "\n" + "\n".join(f"  +{t - start:6.2f}s {m}" for t, m in runtime.logs)
+            raise AssertionError("condition not reached in time" + detail)
         await asyncio.sleep(0.05)
