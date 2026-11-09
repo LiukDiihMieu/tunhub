@@ -25,6 +25,24 @@ class RouteChoice(BaseModel):
     route: int | None = None
 
 
+def _is_trusted_fetch(request: Request) -> bool:
+    """Whether a GET may come from the user rather than from another web page.
+
+    Browsers send Sec-Fetch-* headers that pages cannot forge. Allowed are
+    bookmarks and typed URLs ("none"), the dashboard itself ("same-origin"), and
+    links the user clicked on another page (a top-level navigation with user
+    activation). Clients without these headers, such as curl, are allowed too.
+    """
+    site = request.headers.get("sec-fetch-site")
+    if site is None or site in ("none", "same-origin"):
+        return True
+    return (
+        request.headers.get("sec-fetch-mode") == "navigate"
+        and request.headers.get("sec-fetch-dest") == "document"
+        and request.headers.get("sec-fetch-user") == "?1"
+    )
+
+
 def create_app(hub: Hub) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -48,7 +66,19 @@ def create_app(hub: Hub) -> FastAPI:
             origin = request.headers.get("origin")
             if request.headers.get("x-tunhub") != "1" or (origin and origin not in allowed_origins):
                 return PlainTextResponse("tunhub: cross-site request rejected", status_code=403)
-        return await call_next(request)
+        # Other web pages must not send GETs either: /open/<id> starts tunnels,
+        # and <img>, fetch() or a scripted redirect could trigger it.
+        elif not _is_trusted_fetch(request):
+            return PlainTextResponse("tunhub: cross-site request rejected", status_code=403)
+
+        response = await call_next(request)
+        # Never render inside another site's frame (clickjacking).
+        response.headers["X-Frame-Options"] = "DENY"
+        csp = response.headers.get("Content-Security-Policy")
+        response.headers["Content-Security-Policy"] = (
+            f"{csp}; frame-ancestors 'none'" if csp else "frame-ancestors 'none'"
+        )
+        return response
 
     def runtime_or_404(service_id: str) -> ServiceRuntime:
         runtime = hub.get(service_id)

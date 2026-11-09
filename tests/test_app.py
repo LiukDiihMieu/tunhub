@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from tunhub.app import create_app
 from tunhub.hub import Hub
+from tunhub.service import Mode
 
 from .helpers import FAKE_SSH, free_port
 
@@ -129,3 +130,44 @@ def test_icon_endpoint_serves_cached_icon_safely(setup, tmp_path):
     assert response.headers["content-type"].startswith("image/svg+xml")
     assert "sandbox" in response.headers["content-security-policy"]
     assert client.get("/api/state").json()["services"][0]["icon_version"] is not None
+    assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
+
+
+def test_pages_refuse_to_be_framed(setup):
+    client, *_ = setup
+    response = client.get("/")
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["content-security-policy"] == "frame-ancestors 'none'"
+
+
+CROSS_SITE_IMG = {"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "no-cors", "Sec-Fetch-Dest": "image"}
+CROSS_SITE_CLICK = {
+    "Sec-Fetch-Site": "cross-site",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-User": "?1",
+}
+
+
+@pytest.mark.parametrize(
+    "headers, allowed",
+    [
+        ({}, True),  # curl and other non-browser clients
+        ({"Sec-Fetch-Site": "none", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "document"}, True),  # bookmark
+        ({"Sec-Fetch-Site": "same-origin", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "document"}, True),
+        (CROSS_SITE_CLICK, True),  # the user clicked a link on another page
+        (CROSS_SITE_IMG, False),  # <img src=".../open/web">
+        ({**CROSS_SITE_CLICK, "Sec-Fetch-User": None}, False),  # scripted redirect, no user click
+        ({**CROSS_SITE_CLICK, "Sec-Fetch-Dest": "iframe"}, False),
+        ({**CROSS_SITE_IMG, "Sec-Fetch-Site": "same-site"}, False),  # e.g. from another *.localhost service
+    ],
+)
+def test_open_rejects_requests_from_other_pages(setup, headers, allowed):
+    client, hub, *_ = setup
+    headers = {k: v for k, v in headers.items() if v is not None}
+    response = client.get("/open/web", headers=headers)
+    if allowed:
+        assert response.status_code == 302
+    else:
+        assert response.status_code == 403
+        assert hub.get("web").mode is not Mode.MANUAL  # the request started nothing

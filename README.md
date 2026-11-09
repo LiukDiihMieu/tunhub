@@ -158,6 +158,10 @@ GNOME's agent normally takes care of that.
   blocks DNS rebinding.
 - State-changing API calls need a custom header and a same-origin `Origin`, so
   other web pages cannot trigger them.
+- Other web pages cannot open a tunnel through `/open/<id>` either (for example
+  with a hidden `<img>`): tunhub only accepts bookmarks, typed URLs, the
+  dashboard itself and links that you click.
+- The dashboard refuses to be shown inside another site's frame (clickjacking).
 - Only services defined in your config can be opened. The web UI never runs
   arbitrary commands.
 - Service icons are fetched only through the service's own local port; tunhub
