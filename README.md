@@ -224,7 +224,9 @@ misconnections the way ssh handles host keys with `known_hosts`:
 
 This prevents accidents, not deliberate attacks: someone on the same network
 can fake a MAC. Targets reached through a VPN have no visible MAC and are used
-without this check.
+without this check. Give direct targets a fixed address (a static IP or a DHCP
+reservation): a running direct route is re-checked when the network changes,
+not when an address is handed to another machine on the same network.
 
 ## How does it compare?
 

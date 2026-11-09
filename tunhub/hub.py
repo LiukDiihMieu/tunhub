@@ -76,7 +76,11 @@ class Hub:
         last: NetworkFingerprint | None = None
         first = True
         while True:
-            current = await asyncio.to_thread(self._fingerprint)
+            try:
+                current = await asyncio.to_thread(self._fingerprint)
+            except Exception:  # treated as UNKNOWN, which re-verifies
+                logger.exception("network fingerprint failed")
+                current = None
             if current is None:
                 if first or last is not None:
                     logger.info("network: unknown (no gateway found); re-verifying direct routes")
@@ -86,7 +90,7 @@ class Hub:
                 if changed:
                     logger.info("network: changed to %s; re-verifying direct routes", current)
             if changed:
-                await asyncio.gather(*(runtime.reverify_direct() for runtime in list(self.runtimes.values())))
+                await asyncio.gather(*(self._reverify(runtime) for runtime in list(self.runtimes.values())))
             last, first = current, False
             await asyncio.sleep(self.config.tunnel.auto_direct_interval)
 
@@ -95,6 +99,15 @@ class Hub:
         targets = [runtime for runtime in self.runtimes.values() if runtime.uses_ssh]
         await asyncio.gather(*(runtime.disconnect_ssh() for runtime in targets))
         return [runtime.service.id for runtime in targets]
+
+    @staticmethod
+    async def _reverify(runtime: ServiceRuntime) -> None:
+        # One failing service must not stop the watcher for all the others.
+        try:
+            await runtime.reverify_direct()
+        except Exception as exc:
+            logger.exception("[%s] re-verifying the direct route failed", runtime.service.id)
+            runtime.log(f"re-verifying the direct route failed: {exc}")
 
     async def shutdown(self) -> None:
         async with self._lifecycle_lock:

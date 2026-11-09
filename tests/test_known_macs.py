@@ -258,3 +258,110 @@ def test_network_watcher(tmp_path, fingerprints, reverified_on_ticks):
         assert [n for n in calls if n < len(fingerprints)] == reverified_on_ticks
 
     run(scenario())
+
+
+# ------------------------------------------------- file errors (from review)
+
+
+def test_unreadable_file_skips_direct(tmp_path):
+    async def scenario():
+        (tmp_path / "known_macs").mkdir()  # reading it fails on every OS
+        verdict = await make_guard(tmp_path, {"192.168.1.10": NAS_MAC}).check("192.168.1.10")
+        assert not verdict.allowed and "cannot read" in verdict.note
+
+    run(scenario())
+
+
+class ReadOnlyKnownMacs(KnownMacs):
+    """Like a read-only config directory: reading works, writing fails."""
+
+    def add(self, ip, mac):
+        raise PermissionError(13, "Permission denied", str(self.path))
+
+
+def test_file_that_cannot_be_written_still_allows_first_use(tmp_path):
+    async def scenario():
+        guard = MacGuard(ReadOnlyKnownMacs(tmp_path / "known_macs"), {"192.168.1.10": NAS_MAC}.get,
+                         skip_loopback=False)
+        verdict = await guard.check("192.168.1.10")
+        assert verdict.allowed and "could not record" in verdict.note
+
+    run(scenario())
+
+
+def test_unreadable_file_falls_back_to_ssh_instead_of_crashing(tmp_path):
+    async def scenario():
+        (tmp_path / "known_macs").mkdir()
+        runtime = await runtime_with_guard(tmp_path, {"127.0.0.1": NAS_MAC})
+        runtime.start()
+        await wait_until(lambda: runtime.state is State.UP, runtime=runtime)
+        assert runtime.active_route == 1 and runtime.mode is Mode.MANUAL  # ssh, still supervised
+        assert "internal error" not in (runtime.last_error or "")
+        await runtime.stop()
+
+    run(scenario())
+
+
+class ExplodingGuard:
+    async def check(self, ip):
+        raise RuntimeError("boom")
+
+
+def test_unexpected_guard_error_does_not_end_auto_direct(tmp_path):
+    async def scenario():
+        runtime = await runtime_with_guard(tmp_path, {}, ssh_fallback=False, auto=True)
+        runtime.guard = ExplodingGuard()
+        runtime.activate()
+        await wait_until(lambda: runtime.identity_warning is not None, runtime=runtime)
+        await asyncio.sleep(0.2)
+        assert not runtime._watcher.done()  # still probing
+        await runtime.close()
+
+    run(scenario())
+
+
+def test_network_watcher_survives_a_failing_service(tmp_path):
+    async def scenario():
+        (tmp_path / "services.yaml").write_text(yaml.safe_dump({
+            "hub": {"port": free_port()},
+            "tunnel": {"ssh_command": [sys.executable, FAKE_SSH], "auto_direct_interval": 0.05},
+            "services": {
+                "bad": {"type": "tcp", "local_port": free_port(), "routes": [{"ssh": "a", "remote": 22}]},
+                "good": {"type": "tcp", "local_port": free_port(), "routes": [{"ssh": "b", "remote": 22}]},
+            },
+        }))
+        hub = Hub(tmp_path, tmp_path / "cache", fingerprint=lambda: None)  # UNKNOWN: re-verify every tick
+        good_calls = []
+
+        async def boom():
+            raise RuntimeError("boom")
+
+        async def good():
+            good_calls.append(1)
+
+        hub.get("bad").reverify_direct = boom
+        hub.get("good").reverify_direct = good
+        await hub.start()
+        await wait_until(lambda: len(good_calls) >= 3)  # several ticks despite "bad"
+        assert not hub._network_watcher.done()
+        await hub.shutdown()
+
+    run(scenario())
+
+
+def test_relay_forwards_to_the_verified_ip_not_the_host_name(tmp_path):
+    # A host name could resolve to another machine on a later connection
+    # (e.g. 'nas.local' on another network); the relay must stick to the IP
+    # that was checked against known_macs.
+    async def scenario():
+        _, target = await start_echo_server()
+        config = make_config({"svc": {"type": "tcp", "local_port": free_port(), "routes": [{"direct": f"localhost:{target}"}]}})
+        runtime = ServiceRuntime(config.services["svc"], config.tunnel)
+        runtime.guard = make_guard(tmp_path, {"127.0.0.1": NAS_MAC})
+        runtime.start()
+        await wait_until(lambda: runtime.state is State.UP, runtime=runtime)
+        assert runtime._relay.target_host == "127.0.0.1"
+        assert f"127.0.0.1 {NAS_MAC}" in (tmp_path / "known_macs").read_text()
+        await runtime.stop()
+
+    run(scenario())

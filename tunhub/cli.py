@@ -158,7 +158,11 @@ def cmd_service(args: argparse.Namespace) -> int:
 
 def cmd_forget(args: argparse.Namespace) -> int:
     path = resolve_config_dir(args) / KNOWN_MACS_FILE
-    removed = KnownMacs(path).forget(args.ip)
+    try:
+        removed = KnownMacs(path).forget(args.ip)
+    except (OSError, ValueError) as exc:
+        print(f"tunhub: cannot update {path}: {exc}", file=sys.stderr)
+        return 1
     if removed:
         print(f"removed {removed} line(s) for {args.ip} from {path}")
         print("its MAC is learned again on the next direct connection")
