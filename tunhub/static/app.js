@@ -1,6 +1,8 @@
 "use strict";
 
 const POLL_MS = 1500;
+// A hidden tab still polls, slowly, so the favicon dot keeps working.
+const HIDDEN_POLL_MS = 15000;
 
 const tiles = new Map(); // service id -> { el, service, iconKey }
 const container = document.getElementById("services");
@@ -401,5 +403,25 @@ $("reload").addEventListener("click", async () => {
   poll();
 });
 
+let pollTimer = null;
+
+function schedulePoll() {
+  clearTimeout(pollTimer);
+  const delay = document.hidden ? HIDDEN_POLL_MS : POLL_MS;
+  pollTimer = setTimeout(async () => {
+    try {
+      await poll();
+    } finally {
+      schedulePoll(); // keep polling even if one update failed
+    }
+  }, delay);
+}
+
+// Back in view: refresh at once instead of showing a stale state.
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) poll();
+  schedulePoll();
+});
+
 poll();
-setInterval(poll, POLL_MS);
+schedulePoll();
