@@ -20,6 +20,7 @@ from enum import Enum
 from typing import Callable
 
 from .config import Route, Service, TunnelSettings
+from .known_macs import MacGuard
 from .net import TcpRelay, ensure_port_free, http_probe, is_port_open, probe_tcp
 from .ssh import SshProcess, build_ssh_command
 
@@ -86,6 +87,10 @@ class ServiceRuntime:
         self._relay: TcpRelay | None = None
         # Called every time the service comes up (the hub uses it for icons).
         self.on_up: Callable[[ServiceRuntime], None] | None = None
+        # Checks that a direct target is still the same machine (set by the hub).
+        self.guard: MacGuard | None = None
+        self.identity_warning: str | None = None  # shown in the dashboard
+        self._last_identity_note: str | None = None
 
     # ------------------------------------------------------------------
     # Commands
@@ -192,6 +197,7 @@ class ServiceRuntime:
             "active_route": self.active_route,
             "pinned_route": self.pinned_route,
             "last_error": self.last_error,
+            "identity_warning": self.identity_warning,
             "connections": self._relay.active_connections if self._relay else None,
             "routes": [
                 {"index": i, "kind": r.kind, "label": r.describe()}
@@ -245,11 +251,40 @@ class ServiceRuntime:
         for index in self._candidate_routes(Mode.AUTO):
             route = self.service.routes[index]
             try:
-                await probe_tcp(route.target_host, route.target_port, self.settings.probe_timeout)
-                return True
+                ip = await probe_tcp(route.target_host, route.target_port, self.settings.probe_timeout)
             except (OSError, asyncio.TimeoutError):
                 continue
+            if await self._identity_problem(ip) is None:
+                return True
         return False
+
+    async def reverify_direct(self) -> None:
+        """The network may have changed: is a running direct route still the same machine?
+
+        Called by the hub's network watcher. A route whose target still has a
+        known MAC stays up, so live connections are not interrupted.
+        """
+        if self.state is not State.UP or self._relay is None or self.active_route is None:
+            return
+        route = self.service.routes[self.active_route]
+        try:
+            ip = await probe_tcp(route.target_host, route.target_port, self.settings.probe_timeout)
+        except (OSError, asyncio.TimeoutError):
+            self._request_down("direct target unreachable after a network change")
+            return
+        if await self._identity_problem(ip) is not None:
+            self._request_down("direct target is a different machine now (next-hop MAC changed)")
+
+    async def _identity_problem(self, ip: str) -> str | None:
+        """None if the direct target ``ip`` may be used, else why not."""
+        if self.guard is None:
+            return None
+        verdict = await self.guard.check(ip)
+        if verdict.note and verdict.note != self._last_identity_note:
+            self.log(verdict.note)  # once per change, not on every 15 s probe
+        self._last_identity_note = verdict.note
+        self.identity_warning = None if verdict.allowed else verdict.note
+        return None if verdict.allowed else verdict.note
 
     def _candidate_routes(self, mode: Mode) -> list[int]:
         if self.pinned_route is not None:
@@ -388,11 +423,14 @@ class ServiceRuntime:
 
     async def _open_direct(self, route: Route) -> None:
         try:
-            await probe_tcp(route.target_host, route.target_port, self.settings.probe_timeout)
+            ip = await probe_tcp(route.target_host, route.target_port, self.settings.probe_timeout)
         except asyncio.TimeoutError:
             raise RouteFailed(f"{route.target} timed out") from None
         except OSError as exc:
             raise RouteFailed(f"{route.target} unreachable ({exc.strerror or exc})") from None
+        # Before any byte (cookies!) is forwarded: is this still the same machine?
+        if await self._identity_problem(ip) is not None:
+            raise RouteFailed(f"{route.target} is not the machine recorded in known_macs (see above)")
 
         relay = TcpRelay(
             LOCAL_HOST,

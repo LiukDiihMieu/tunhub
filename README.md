@@ -203,6 +203,29 @@ Start-ScheduledTask -TaskName TunHub
   never contacts other sites. They are served with a sandboxing CSP and shown
   only as `<img>`.
 
+### Direct routes on other networks: `known_macs`
+
+Private addresses are reused everywhere. In a café whose network also uses
+`192.168.1.x`, another device might answer on your NAS's address, and the
+browser would send it your NAS cookies. tunhub avoids such accidental
+misconnections the way ssh handles host keys with `known_hosts`:
+
+- The first time a direct route connects, tunhub records the MAC address of
+  the next hop toward the target (the target itself on the same subnet, else
+  the router) in `known_macs`, next to `services.yaml`:
+  `Permanently added 192.168.1.10 (aa:bb:cc:dd:ee:01) to known_macs`.
+- Later, a direct route is used only if that MAC matches. Otherwise it is
+  skipped (falling back to ssh, if configured) and the tile shows ⚠.
+- When the network changes, or cannot be determined, running direct routes
+  are checked again; a route that still reaches the same machine stays up.
+- If a MAC changes for a good reason (new network card, another router),
+  run `tunhub forget <ip>` or edit `known_macs`; several lines for one IP are
+  all trusted. The file can be synced together with your config.
+
+This prevents accidents, not deliberate attacks: someone on the same network
+can fake a MAC. Targets reached through a VPN have no visible MAC and are used
+without this check.
+
 ## How does it compare?
 
 |                                   | opens on click | picks direct or SSH | nothing on servers | non-web services |

@@ -184,6 +184,11 @@ function updateTile(tile, service) {
   q(".state-text").textContent = statusText(service);
   el.title = service.state === "retrying" ? service.last_error || "" : "";
 
+  // The direct target looks like a different machine (see known_macs).
+  const warn = q(".identity-warn");
+  warn.hidden = !service.identity_warning;
+  warn.title = service.identity_warning || "";
+
   const key = iconKeyOf(service);
   if (tile.iconKey !== key) {
     tile.iconKey = key;
@@ -237,6 +242,10 @@ function updateDrawer() {
   const error = $("d-error");
   error.hidden = !service.last_error || service.state === "up";
   error.textContent = service.last_error || "";
+
+  const identity = $("d-identity");
+  identity.hidden = !service.identity_warning;
+  identity.textContent = service.identity_warning ? `⚠ ${service.identity_warning}` : "";
 
   $("d-address").textContent = service.url || service.address;
   $("d-bookmark").textContent = `${hubUrl}/open/${service.id}`;
