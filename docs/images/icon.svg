@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#18233f"/><stop offset="1" stop-color="#0a1024"/>
+    </linearGradient>
+    <linearGradient id="arc" gradientUnits="userSpaceOnUse" x1="0" y1="46.0" x2="0" y2="80">
+      <stop offset="0" stop-color="#c7b4ff"/><stop offset="1" stop-color="#8a62f2"/>
+    </linearGradient>
+    <linearGradient id="line" gradientUnits="userSpaceOnUse" x1="30" y1="0" x2="98" y2="0">
+      <stop offset="0" stop-color="#2cc8ee"/><stop offset="0.5" stop-color="#62eef8"/><stop offset="1" stop-color="#2cc8ee"/>
+    </linearGradient>
+    <radialGradient id="glow">
+      <stop offset="0" stop-color="#62eef8" stop-opacity="0.45"/><stop offset="1" stop-color="#62eef8" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="node" cx="0.4" cy="0.35" r="0.7">
+      <stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d9d5f3"/>
+    </radialGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#tile)"/>
+  <rect x="0.75" y="0.75" width="126.5" height="126.5" rx="27.25" fill="none" stroke="#8ea2ff" stroke-opacity="0.16" stroke-width="1.5"/>
+  <ellipse cx="64" cy="82" rx="48.0" ry="12.8" fill="url(#glow)"/>
+  <path d="M30 80H98" stroke="url(#line)" stroke-width="8" stroke-linecap="round"/>
+  <path d="M30 80A34.0 34.0 0 0 1 46.406 50.906M81.594 50.906A34.0 34.0 0 0 1 98 80" fill="none" stroke="url(#arc)" stroke-width="8"/>
+  <path d="M64 31.0L79 46.0L64 61.0L49 46.0Z" fill="#dccfff" stroke="#dccfff" stroke-width="1.5" stroke-linejoin="round"/>
+  <path d="M64 37.5L72.5 46.0L64 54.5L55.5 46.0Z" fill="#8e69f3"/>
+  <circle cx="30" cy="80" r="9" fill="url(#node)"/>
+  <circle cx="98" cy="80" r="9" fill="url(#node)"/>
+</svg>

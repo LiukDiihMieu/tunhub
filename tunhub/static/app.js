@@ -315,6 +315,30 @@ $("d-refresh-icon").addEventListener("click", async () => {
   poll();
 });
 
+// --------------------------------------------------------------- favicon
+
+// The tab icon gets a dot while a service is connecting (amber) or failing
+// (red), so a pinned tab shows trouble without being opened.
+const FAVICON_DOTS = { connecting: "#d97706", failing: "#dc2626" };
+let faviconSvg = null;
+let faviconStatus = null;
+fetch("/static/icons/favicon.svg")
+  .then((response) => response.text())
+  .then((svg) => { faviconSvg = svg; })
+  .catch(() => {});
+
+function updateFavicon(services) {
+  let status = null;
+  if (services.some((s) => s.state === "retrying")) status = "failing";
+  else if (services.some((s) => s.state === "connecting")) status = "connecting";
+  if (!faviconSvg || status === faviconStatus) return;
+  faviconStatus = status;
+  const dot = status
+    ? `<circle cx="13" cy="3" r="2.75" fill="${FAVICON_DOTS[status]}" stroke="#0a1024" stroke-width="1"/>`
+    : "";
+  $("favicon").href = `data:image/svg+xml,${encodeURIComponent(faviconSvg.replace("</svg>", `${dot}</svg>`))}`;
+}
+
 // ------------------------------------------------------------------ poll
 
 async function poll() {
@@ -344,6 +368,7 @@ async function poll() {
 
   const upCount = data.services.filter((s) => s.state === "up").length;
   $("summary").textContent = `${upCount}/${data.services.length} connected`;
+  updateFavicon(data.services);
 
   const sshCount = data.services.filter((s) => s.uses_ssh).length;
   const disconnect = $("disconnect-ssh");

@@ -7,8 +7,9 @@
   --muted: #6b7380;
   --accent: #2563eb;
   --accent-text: #ffffff;
-  --ok: #16a34a;
-  --direct: #2563eb;
+  /* Route colours match the logo: cyan line = direct, purple arc = ssh. */
+  --direct: #0aa5c9;
+  --ssh: #7c4dee;
   --warn: #d97706;
   --bad: #dc2626;
   --off: #9aa3ae;
@@ -16,6 +17,11 @@
   --icon-bg: #eef1f5;
   --shadow: 0 8px 30px rgba(15, 23, 42, 0.18);
   --radius: 12px;
+  --logo-line: #13b8d9;
+  --logo-arc: #7c55ea;
+  --logo-rim: #c3b1ff;
+  --logo-core: #6a3fe0;
+  --logo-node: #1d2748;
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   color-scheme: light;
 }
@@ -29,7 +35,13 @@
     --text: #e6e8eb;
     --muted: #8f97a3;
     --accent: #3b82f6;
-    --direct: #60a5fa;
+    --direct: #3fdcf2;
+    --ssh: #a98cfb;
+    --logo-line: #4fe3f5;
+    --logo-arc: #a98cfb;
+    --logo-rim: #dccfff;
+    --logo-core: #8e69f3;
+    --logo-node: #f4f2ff;
     --code-bg: #252a32;
     --icon-bg: #2a2f37;
     --off: #5f6772;
@@ -63,8 +75,14 @@ body {
   border-bottom: 1px solid var(--border);
   background: var(--surface);
 }
-.brand { display: flex; align-items: baseline; gap: 12px; }
-.brand h1 { margin: 0; font-size: 18px; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand h1 { margin: 0 4px 0 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+.logo { width: 34px; height: 25px; flex: none; }
+.logo-line { stroke: var(--logo-line); stroke-width: 8; stroke-linecap: round; }
+.logo-arc { fill: none; stroke: var(--logo-arc); stroke-width: 8; }
+.logo-rim { fill: var(--logo-rim); stroke: var(--logo-rim); stroke-width: 1.5; stroke-linejoin: round; }
+.logo-core { fill: var(--logo-core); }
+.logo-node { fill: var(--logo-node); }
 .topbar-actions { display: flex; align-items: center; gap: 12px; }
 
 .banner {
@@ -150,7 +168,7 @@ body {
 .status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
 
 .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--off); flex: none; }
-[data-state="up"] .dot, .dot[data-state="up"] { background: var(--ok); }
+[data-state="up"] .dot, .dot[data-state="up"] { background: var(--ssh); }
 [data-state="up"][data-route-kind="direct"] .dot,
 .dot[data-state="up"][data-route-kind="direct"] { background: var(--direct); }
 [data-state="connecting"] .dot, .dot[data-state="connecting"] { background: var(--warn); animation: pulse 1s infinite; }

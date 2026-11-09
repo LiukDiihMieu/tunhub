@@ -3,14 +3,27 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TunHub</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='6' fill='%233b82f6'/></svg>">
+  <title>tunhub</title>
+  <link rel="icon" id="favicon" type="image/svg+xml" href="/static/icons/favicon.svg">
+  <link rel="alternate icon" type="image/png" href="/static/icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <meta name="theme-color" content="#0a1024">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <h1>TunHub</h1>
+      <!-- The mark (see tools/make_icons.py); colours follow the theme via CSS. -->
+      <svg class="logo" viewBox="18 26 92 68" aria-hidden="true">
+        <path class="logo-line" d="M30 80H98"/>
+        <path class="logo-arc" d="M30 80A34 34 0 0 1 46.406 50.906M81.594 50.906A34 34 0 0 1 98 80"/>
+        <path class="logo-rim" d="M64 31L79 46L64 61L49 46Z"/>
+        <path class="logo-core" d="M64 37.5L72.5 46L64 54.5L55.5 46Z"/>
+        <circle class="logo-node" cx="30" cy="80" r="9"/>
+        <circle class="logo-node" cx="98" cy="80" r="9"/>
+      </svg>
+      <h1>tunhub</h1>
       <span id="client" class="muted"></span>
     </div>
     <div class="topbar-actions">
