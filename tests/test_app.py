@@ -118,6 +118,30 @@ def test_reload_adds_service_and_keeps_running_one(setup):
     assert hub.get("rdp") is not None  # old config kept
 
 
+def test_reload_rejects_service_on_the_running_dashboard_port(setup):
+    client, hub, local_port, _ = setup
+    running_port = hub.hub_settings.port
+    # Moving the hub elsewhere only takes effect after a restart, so the
+    # dashboard still owns its old port and no service may take it.
+    (hub.config_dir / "services.yaml").write_text(
+        f"""
+hub: {{port: {free_port()}}}
+services:
+  web:
+    local_port: {local_port}
+    routes: [{{direct: "127.0.0.1:1"}}]
+  intruder:
+    type: tcp
+    local_port: {running_port}
+    routes: [{{direct: "127.0.0.1:1"}}]
+"""
+    )
+    response = client.post("/api/reload", headers={"X-Tunhub": "1"})
+    assert response.status_code == 400
+    assert "running dashboard" in response.json()["error"]
+    assert hub.get("intruder") is None  # old config kept
+
+
 def test_icon_endpoint_serves_cached_icon_safely(setup, tmp_path):
     client, hub, _, _ = setup
     assert client.get("/api/icons/web").status_code == 404

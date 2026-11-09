@@ -72,6 +72,15 @@ class Hub:
 
     async def _reload(self) -> list[str]:
         new_config = load_config(self.config_dir)
+        # load_config() checks ports against the *new* hub port, but the
+        # dashboard keeps listening on the old one until tunhub restarts.
+        running_port = self.hub_settings.port
+        for service in new_config.services.values():
+            if service.local_port == running_port:
+                raise ConfigError(
+                    f"service '{service.id}': local_port {running_port} is used by the running "
+                    "dashboard (hub changes apply only after a restart)"
+                )
         messages: list[str] = []
         if new_config.hub != self.hub_settings:
             messages.append("hub settings changed; restart tunhub to apply them")
