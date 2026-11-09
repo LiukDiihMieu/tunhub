@@ -3,6 +3,7 @@
 import asyncio
 import sys
 
+import pytest
 import yaml
 
 from tunhub.hub import Hub
@@ -114,3 +115,41 @@ def test_overlapping_reloads_leave_one_runtime(tmp_path):
         assert supervisors() == 0
 
     run(scenario())
+
+
+@pytest.mark.parametrize("command", ["stop", "start"])
+def test_stop_or_start_during_auto_probe_wins(command):
+    """A user command that lands while the auto-direct probe runs must win."""
+
+    async def scenario(command: str):
+        _, target = await start_echo_server()
+        config = make_config(
+            {"svc": {"type": "tcp", "local_port": free_port(), "routes": [{"direct": f"127.0.0.1:{target}"}]}},
+            auto_direct_interval=0.05,
+        )
+        runtime = ServiceRuntime(config.services["svc"], config.tunnel)
+        probing, release = asyncio.Event(), asyncio.Event()
+
+        async def controlled_probe() -> bool:
+            probing.set()
+            await release.wait()
+            return True  # the direct route is reachable
+
+        runtime._direct_reachable = controlled_probe
+        runtime.activate()
+        await asyncio.wait_for(probing.wait(), 5)
+
+        if command == "stop":
+            await runtime.stop()
+        else:
+            runtime.start()
+        release.set()
+        await asyncio.sleep(0.3)
+
+        if command == "stop":
+            assert runtime.mode is Mode.OFF and supervisors() == 0  # used to auto-start anyway
+        else:
+            assert runtime.mode is Mode.MANUAL  # used to be downgraded to AUTO (no ssh fallback)
+        await runtime.close()
+
+    run(scenario(command))

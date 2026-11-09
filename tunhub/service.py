@@ -226,15 +226,20 @@ class ServiceRuntime:
     async def _auto_watch(self) -> None:
         """Bring the service up via direct whenever a direct route is reachable."""
         while True:
-            if (
-                self.mode is Mode.OFF
-                and not self.manually_stopped
-                and (self._task is None or self._task.done())
-                and await self._direct_reachable()
-            ):
+            # Check again after the probe: a Stop or Start may have arrived
+            # while it was running, and the user's command must win.
+            if self._may_auto_start() and await self._direct_reachable() and self._may_auto_start():
                 self.log("direct route reachable, connecting automatically")
                 self._launch(Mode.AUTO)
             await asyncio.sleep(self.settings.auto_direct_interval)
+
+    def _may_auto_start(self) -> bool:
+        return (
+            not self._closed
+            and self.mode is Mode.OFF
+            and not self.manually_stopped
+            and (self._task is None or self._task.done())
+        )
 
     async def _direct_reachable(self) -> bool:
         for index in self._candidate_routes(Mode.AUTO):
