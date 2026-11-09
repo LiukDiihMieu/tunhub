@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TunHub</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='8' r='6' fill='%233b82f6'/></svg>">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1>TunHub</h1>
+      <span id="client" class="muted"></span>
+    </div>
+    <div class="topbar-actions">
+      <span id="summary" class="muted"></span>
+      <button id="disconnect-ssh" class="btn ghost stop" title="Stop every service using ssh; direct connections stay up" disabled>Disconnect SSH</button>
+      <button id="reload" class="btn ghost" title="Re-read services.yaml and local.yaml">Reload config</button>
+    </div>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <main id="services" class="grid"></main>
+
+  <!-- Front of a service: launch by clicking the icon. -->
+  <template id="tile-template">
+    <article class="tile">
+      <button class="more" aria-label="Details" title="Details">⋯</button>
+      <a class="launch">
+        <span class="icon"></span>
+        <span class="name"></span>
+      </a>
+      <div class="status"><span class="dot" aria-hidden="true"></span><span class="state-text"></span></div>
+      <code class="tcp-address" hidden></code>
+      <button class="btn small stop" hidden>Stop</button>
+    </article>
+  </template>
+
+  <!-- Details drawer: everything that is not needed every day. -->
+  <aside id="drawer" class="drawer" hidden aria-label="Service details">
+    <div class="drawer-head">
+      <span class="icon" id="d-icon"></span>
+      <div class="drawer-title">
+        <h2 id="d-name"></h2>
+        <div class="status"><span class="dot" id="d-dot" aria-hidden="true"></span><span id="d-state"></span></div>
+      </div>
+      <button class="more" id="d-close" aria-label="Close" title="Close (Esc)">✕</button>
+    </div>
+
+    <p id="d-error" class="error" hidden></p>
+
+    <dl class="fields">
+      <dt>Address</dt>
+      <dd><code id="d-address"></code><button class="icon-btn" id="d-copy-address">Copy</button></dd>
+      <dt>Bookmark</dt>
+      <dd><code id="d-bookmark"></code><button class="icon-btn" id="d-copy-bookmark">Copy</button></dd>
+      <dt>Route</dt>
+      <dd><select id="d-route"></select></dd>
+      <dt>Active</dt>
+      <dd id="d-route-active" class="muted"></dd>
+    </dl>
+
+    <div class="actions">
+      <button id="d-toggle" class="btn"></button>
+      <button id="d-refresh-icon" class="btn ghost">Refresh icon</button>
+    </div>
+
+    <h3>Log</h3>
+    <pre id="d-log" class="log"></pre>
+  </aside>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,50 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tunhub"
+dynamic = ["version"]
+description = "One local dashboard for your SSH-tunnelled and LAN services: bookmark once, open from anywhere."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Liuk Diih Mieu" }]
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "PyYAML>=6.0",
+]
+keywords = ["ssh", "tunnel", "port-forwarding", "homelab", "dashboard", "self-hosted"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Intended Audience :: System Administrators",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Internet :: Proxy Servers",
+    "Topic :: System :: Networking",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "httpx>=0.27"]
+
+[project.scripts]
+tunhub = "tunhub.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/LiukDiihMieu/tunhub"
+Issues = "https://github.com/LiukDiihMieu/tunhub/issues"
+
+[tool.hatch.version]
+path = "tunhub/__init__.py"
+
+[tool.hatch.build.targets.sdist]
+include = ["tunhub", "tests", "README.md", "LICENSE", "CHANGELOG.md"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["tunhub"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

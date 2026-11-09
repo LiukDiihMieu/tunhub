@@ -1,0 +1,87 @@
+# tunhub service definitions.
+#
+# Share this file between your machines (e.g. via a dotfiles repo). Per-machine
+# tweaks go into local.yaml next to it; see local.example.yaml.
+#
+# Every service listens on a FIXED local port. Web services are opened as
+#   http://<id>.localhost:<local_port>   (Chromium-based browsers and Firefox resolve
+#                                         *.localhost to 127.0.0.1 by themselves)
+# and TCP services (RDP, VNC, databases, ...) are reached at 127.0.0.1:<local_port>.
+#
+# `routes` are tried in order; the first one that works is used:
+#   - direct: host:port            -> local TCP relay to host:port (e.g. on your LAN)
+#   - ssh: <Host alias from ~/.ssh/config>
+#     remote: host:port            -> ssh -L; host:port as seen from the SSH server
+#                                     (a bare port means 127.0.0.1:<port>)
+#
+# Per-service keys (only local_port and routes are required):
+#   name         display name                      (default: the id)
+#   type         http | https | tcp                (default: http)
+#   local_port   fixed port on 127.0.0.1           (required, unique)
+#   hostname     browser host name                 (default: <id>.localhost)
+#   path         path to open                      (default: /)
+#   autostart    connect when tunhub starts        (default: false)
+#   auto_direct  connect automatically while a direct route is reachable
+#                (default: tunnel.auto_direct)
+#   health_check wait for an HTTP answer before opening (default: true for web)
+#   icon         image file relative to this directory (default: discovered
+#                from the web service, else coloured initials)
+#   description  shown in the dashboard
+#   enabled      false hides the service             (handy in local.yaml)
+
+hub:
+  port: 8765
+  hostname: hub.localhost   # dashboard: http://hub.localhost:8765
+  # listen: 127.0.0.1
+  # open_timeout: 40        # seconds /open/<id> waits before showing an error
+
+tunnel:
+  ssh_command: ssh          # or a list, e.g. [C:/Windows/System32/OpenSSH/ssh.exe]
+  # ssh_options:            # extra `-o` options; key auth only (BatchMode=yes)
+  #   ServerAliveInterval: 15
+  # probe_timeout: 0.8      # seconds to test a direct route
+  # ready_timeout: 15       # seconds to wait for ssh to open the forward
+  # health_timeout: 8       # seconds to wait for an HTTP answer (web services)
+  # auto_direct: true       # bring services up by themselves when a direct route is reachable
+  # auto_direct_interval: 15  # seconds between probes
+
+# Example services: replace the addresses and ssh aliases with your own.
+services:
+  nas:
+    name: NAS
+    local_port: 15000
+    routes:
+      - direct: 192.168.1.10:5000       # at home: straight to the NAS
+      - ssh: nas                        # elsewhere: through ssh
+        remote: 127.0.0.1:5000
+
+  adguard:
+    name: AdGuard Home
+    local_port: 13000
+    routes:
+      - direct: 192.168.1.10:3000
+      - ssh: nas
+        remote: 3000
+
+  qbittorrent:
+    name: qBittorrent
+    local_port: 8080                    # keep equal to the WebUI port (Host port check)
+    routes:
+      - direct: 192.168.1.10:8080
+      - ssh: nas
+        remote: 8080
+
+  jupyter:
+    name: Jupyter
+    local_port: 18888
+    routes:
+      - ssh: workstation
+        remote: 8888
+
+  desktop:
+    name: Workstation Desktop
+    type: tcp                           # point your RDP client at 127.0.0.1:13389
+    local_port: 13389
+    routes:
+      - ssh: workstation
+        remote: 3389

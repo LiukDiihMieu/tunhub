@@ -1,0 +1,19 @@
+# Copy to local.yaml to override services.yaml on THIS machine only.
+# Mappings are merged key by key; lists (such as `routes`) are replaced entirely.
+
+services:
+  # This machine IS the workstation: reach its services locally, and hide its
+  # own remote desktop.
+  jupyter:
+    routes:
+      - direct: 127.0.0.1:8888
+  desktop:
+    enabled: false
+
+  # Keep the NAS connected from startup.
+  nas:
+    autostart: true
+
+  # Change only the local port (e.g. 13000 is taken on this machine).
+  # adguard:
+  #   local_port: 23000
