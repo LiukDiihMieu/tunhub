@@ -11,6 +11,8 @@ from pathlib import Path
 
 from . import __version__
 from .config import LOCAL_FILE, SHARED_FILE, ConfigError
+from .known_macs import FILE_NAME as KNOWN_MACS_FILE
+from .known_macs import KnownMacs
 from .winjob import kill_children_on_exit
 from .paths import CONFIG_DIR_ENV, default_config_dir, default_log_file
 
@@ -53,6 +55,14 @@ def build_parser() -> argparse.ArgumentParser:
     service = commands.add_parser("service", parents=[config_option], help="start tunhub at login")
     service.add_argument("action", choices=("install", "uninstall", "status"))
     service.set_defaults(handler=cmd_service)
+
+    forget = commands.add_parser(
+        "forget",
+        parents=[config_option],
+        help="forget the known MAC of a direct target (like ssh-keygen -R)",
+    )
+    forget.add_argument("ip", help="the direct target's IP address, as in known_macs")
+    forget.set_defaults(handler=cmd_forget)
     return parser
 
 
@@ -143,4 +153,15 @@ def cmd_service(args: argparse.Namespace) -> int:
     except AutostartError as exc:
         print(f"tunhub: {exc}", file=sys.stderr)
         return 1
+    return 0
+
+
+def cmd_forget(args: argparse.Namespace) -> int:
+    path = resolve_config_dir(args) / KNOWN_MACS_FILE
+    removed = KnownMacs(path).forget(args.ip)
+    if removed:
+        print(f"removed {removed} line(s) for {args.ip} from {path}")
+        print("its MAC is learned again on the next direct connection")
+    else:
+        print(f"no entry for {args.ip} in {path}")
     return 0

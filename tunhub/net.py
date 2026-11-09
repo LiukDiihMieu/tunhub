@@ -104,10 +104,15 @@ async def _pipe(reader: asyncio.StreamReader, writer: asyncio.StreamWriter, abor
         abort()
 
 
-async def probe_tcp(host: str, port: int, timeout: float) -> None:
-    """Raise OSError/TimeoutError unless a TCP connection can be opened."""
+async def probe_tcp(host: str, port: int, timeout: float) -> str:
+    """Open and close a TCP connection; return the peer IP it reached.
+
+    Raises OSError/TimeoutError if the connection cannot be opened.
+    """
     _, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout)
+    peer_ip = writer.get_extra_info("peername")[0]
     writer.close()
+    return peer_ip
 
 
 async def is_port_open(host: str, port: int, timeout: float) -> bool:

@@ -282,6 +282,16 @@ select {
 .drawer h3 { margin: 4px 0 0; font-size: 13px; color: var(--muted); font-weight: 600; }
 
 .error { margin: 0; color: var(--bad); font-size: 13px; word-break: break-word; }
+.identity {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--warn);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 13px;
+  word-break: break-word;
+}
+.identity-warn { color: var(--warn); font-weight: 700; cursor: help; }
 
 .log {
   flex: 1;

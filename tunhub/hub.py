@@ -5,18 +5,32 @@ from __future__ import annotations
 import asyncio
 import logging
 from pathlib import Path
+from typing import Callable
 
 from .config import Config, ConfigError, HubSettings, Service, TunnelSettings, load_config
 from .icons import IconStore
+from .known_macs import FILE_NAME as KNOWN_MACS_FILE
+from .known_macs import KnownMacs, MacGuard
+from .nexthop import NetworkFingerprint, network_fingerprint, next_hop_mac
 from .service import Mode, ServiceRuntime
 
 logger = logging.getLogger("tunhub")
 
 
 class Hub:
-    def __init__(self, config_dir: Path, cache_dir: Path | None = None) -> None:
+    def __init__(
+        self,
+        config_dir: Path,
+        cache_dir: Path | None = None,
+        *,
+        mac_lookup: Callable[[str], str | None] = next_hop_mac,
+        fingerprint: Callable[[], NetworkFingerprint | None] = network_fingerprint,
+    ) -> None:
         self.config_dir = config_dir
         self.icons = IconStore(config_dir, cache_dir)
+        self.guard = MacGuard(KnownMacs(config_dir / KNOWN_MACS_FILE), mac_lookup)
+        self._fingerprint = fingerprint
+        self._network_watcher: asyncio.Task | None = None
         self._background: set[asyncio.Task] = set()
         # Reload and shutdown replace runtimes; running two at once would leave
         # an orphaned runtime holding a port.
@@ -35,6 +49,7 @@ class Hub:
     def _make_runtime(self, service: Service, settings: TunnelSettings) -> ServiceRuntime:
         runtime = ServiceRuntime(service, settings)
         runtime.on_up = self._on_service_up
+        runtime.guard = self.guard
         return runtime
 
     def _on_service_up(self, runtime: ServiceRuntime) -> None:
@@ -49,6 +64,31 @@ class Hub:
             if runtime.service.autostart:
                 runtime.log("autostart")
                 runtime.start()
+        self._network_watcher = asyncio.create_task(self._watch_network(), name="network-watcher")
+
+    async def _watch_network(self) -> None:
+        """Re-verify running direct routes whenever the network may have changed.
+
+        A running direct route can only reach a different machine if the
+        network changed under it. A fingerprint that cannot be determined is
+        UNKNOWN, not "unchanged": then routes are re-verified on every tick.
+        """
+        last: NetworkFingerprint | None = None
+        first = True
+        while True:
+            current = await asyncio.to_thread(self._fingerprint)
+            if current is None:
+                if first or last is not None:
+                    logger.info("network: unknown (no gateway found); re-verifying direct routes")
+                changed = True
+            else:
+                changed = not first and current != last
+                if changed:
+                    logger.info("network: changed to %s; re-verifying direct routes", current)
+            if changed:
+                await asyncio.gather(*(runtime.reverify_direct() for runtime in list(self.runtimes.values())))
+            last, first = current, False
+            await asyncio.sleep(self.config.tunnel.auto_direct_interval)
 
     async def disconnect_ssh(self) -> list[str]:
         """Stop every service that uses (or is trying) ssh; direct ones stay up."""
@@ -58,6 +98,8 @@ class Hub:
 
     async def shutdown(self) -> None:
         async with self._lifecycle_lock:
+            if self._network_watcher is not None:
+                self._network_watcher.cancel()
             for task in self._background:
                 task.cancel()
             await asyncio.gather(*(runtime.close() for runtime in self.runtimes.values()))
