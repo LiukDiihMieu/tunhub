@@ -176,7 +176,13 @@ def test_teardown_waits_until_port_is_released():
         def stop_but_linger():
             real_stop()
             blocker = socket.socket()
-            blocker.bind(("127.0.0.1", runtime.service.local_port))
+            try:
+                blocker.bind(("127.0.0.1", runtime.service.local_port))
+            except OSError:
+                # Already busy: the OS itself is lingering (Windows), which is
+                # exactly the situation this test simulates elsewhere.
+                blocker.close()
+                return
             blocker.listen()
             threading.Timer(0.5, blocker.close).start()
 
