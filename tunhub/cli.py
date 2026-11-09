@@ -11,6 +11,7 @@ from pathlib import Path
 
 from . import __version__
 from .config import LOCAL_FILE, SHARED_FILE, ConfigError
+from .winjob import kill_children_on_exit
 from .paths import CONFIG_DIR_ENV, default_config_dir, default_log_file
 
 TEMPLATES = ("services.yaml", "local.example.yaml")
@@ -95,6 +96,9 @@ def cmd_run(args: argparse.Namespace) -> int:
     except ConfigError as exc:
         print(f"tunhub: config error: {exc}", file=sys.stderr)
         return 2
+
+    # Windows: ssh processes end with tunhub, even if tunhub is killed.
+    kill_children_on_exit()
 
     settings = hub.hub_settings
     print(f"tunhub {__version__}: config {config_dir}", file=sys.stderr)
