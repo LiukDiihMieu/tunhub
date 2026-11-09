@@ -2,8 +2,15 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [main]
+    paths-ignore: ["**.md", "LICENSE"]
   pull_request:
+    paths-ignore: ["**.md", "LICENSE"]
+
+# A newer push to the same branch cancels the run still in progress.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -11,9 +18,17 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
+      # Linux covers every Python version. macOS and Windows minutes are billed
+      # at 10x and 2x on private repos, so they only run the oldest and newest
+      # versions: platform issues rarely depend on the Python minor version.
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest]
         python: ["3.10", "3.11", "3.12", "3.13"]
+        include:
+          - { os: macos-latest, python: "3.10" }
+          - { os: macos-latest, python: "3.13" }
+          - { os: windows-latest, python: "3.10" }
+          - { os: windows-latest, python: "3.13" }
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
