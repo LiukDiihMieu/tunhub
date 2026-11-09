@@ -13,7 +13,8 @@
 [![License: GPL v3+](https://img.shields.io/badge/license-GPL--3.0--or--later-green)](LICENSE)
 
 <p align="center">
-  <img src="docs/images/dashboard.png" alt="The tunhub dashboard: one tile per service, with a status dot showing whether it is connected directly or through SSH" width="820">
+  <img src="docs/images/demo.gif" alt="Opening AdGuard from a browser favourite: tunhub starts the SSH tunnel by itself (the tile turns from grey to amber to purple) and the AdGuard page opens" width="764">
+  <br><sub>A plain browser favourite opens AdGuard; tunhub starts the SSH tunnel on the way.</sub>
 </p>
 
 You self-host services with a web UI: Jupyter on a lab workstation, the admin
@@ -40,6 +41,10 @@ takes you there. When you are on the same LAN, it skips SSH and connects directl
   on/off tile that copies their address for your client.
 - **Lightweight.** One Python process using about 50 MB of memory and
   practically no CPU when idle, plus about 4 MB for each active ssh tunnel.
+
+<p align="center">
+  <img src="docs/images/dashboard.png" alt="The tunhub dashboard: one tile per service, with a status dot showing whether it is connected directly or through SSH" width="820">
+</p>
 
 ## Get started
 
@@ -171,6 +176,15 @@ The service runs the same Python interpreter that installed it. If you pass
 `--config-dir` (or have `TUNHUB_CONFIG_DIR` set), it is written into the service.
 On Linux, the systemd user session must see your ssh-agent (`SSH_AUTH_SOCK`);
 GNOME's agent normally takes care of that.
+
+On Windows, stop tunhub before upgrading it, because Windows cannot replace a
+program that is running (`uv` then fails with "Access is denied"):
+
+```powershell
+Stop-ScheduledTask -TaskName TunHub
+uv tool upgrade tunhub
+Start-ScheduledTask -TaskName TunHub
+```
 
 ## Security
 
