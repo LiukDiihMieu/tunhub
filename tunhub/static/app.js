@@ -149,9 +149,9 @@ function createTile(service) {
     poll();
   });
 
-  el.querySelector(".more").addEventListener("click", () => {
+  el.querySelector(".more").addEventListener("click", (event) => {
     if (drawerId === tile.service.id) closeDrawer();
-    else openDrawer(tile.service.id);
+    else openDrawer(tile.service.id, event.currentTarget);
   });
 
   tiles.set(service.id, tile);
@@ -204,20 +204,29 @@ function updateTile(tile, service) {
 
 // ---------------------------------------------------------------- drawer
 
-function openDrawer(id) {
+// The drawer is a non-modal side panel: the tiles stay usable while it is open.
+// Focus moves into it on open (not trapped) and back to its ⋯ button on close.
+let drawerTrigger = null;
+
+function openDrawer(id, trigger = null) {
   drawerId = id;
+  drawerTrigger = trigger;
   drawerIconKey = null;
   drawerRoutesKey = null;
   drawer.hidden = false;
   for (const tile of tiles.values()) tile.el.classList.toggle("selected", tile.service.id === id);
   updateDrawer();
   refreshLogs(true);
+  $("d-name").focus({ preventScroll: true });
 }
 
 function closeDrawer() {
   drawerId = null;
   drawer.hidden = true;
   for (const tile of tiles.values()) tile.el.classList.remove("selected");
+  const trigger = drawerTrigger;
+  drawerTrigger = null;
+  if (trigger && trigger.isConnected) trigger.focus({ preventScroll: true });
 }
 
 function drawerService() {

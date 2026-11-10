@@ -166,6 +166,9 @@ body {
 .launch:hover { background: var(--surface-hover); }
 .launch:hover .icon { transform: translateY(-2px); }
 .launch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* A focus ring for keyboard use only, not after a mouse click. */
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:focus:not(:focus-visible) { outline: none; }
 
 .icon {
   display: grid;
@@ -280,6 +283,7 @@ code, pre { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
 .drawer-head .icon.letters { font-size: 19px; }
 .drawer-head .more { top: 0; right: 0; }
 .drawer-title h2 { margin: 0 0 2px; font-size: 17px; }
+.drawer-title h2:focus { outline: none; } /* focused on open, but not a control */
 
 .fields {
   display: grid;
