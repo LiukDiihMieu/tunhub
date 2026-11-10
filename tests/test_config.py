@@ -12,7 +12,7 @@ def test_defaults_for_web_service():
     assert dsm.hostname == "dsm.localhost"
     assert dsm.url == "http://dsm.localhost:15000/"
     assert dsm.health_check is True
-    assert config.hub.allowed_hosts == {"hub.localhost:8765", "localhost:8765", "127.0.0.1:8765"}
+    assert config.hub.allowed_hosts == {"hub.localhost:1110", "localhost:1110", "127.0.0.1:1110"}
 
 
 def test_tcp_service_uses_loopback_address_and_no_health_check():
@@ -252,6 +252,6 @@ def test_empty_config_file_is_an_empty_mapping(tmp_path, file_name):
 def test_missing_services_yaml_is_an_empty_config(tmp_path):
     config = load_config(tmp_path)
     assert config.services == {} and config.found is False
-    assert config.hub.port == 8765  # defaults still apply
+    assert config.hub.port == 1110  # defaults still apply
     (tmp_path / "services.yaml").write_text("services: {}\n")
     assert load_config(tmp_path).found is True

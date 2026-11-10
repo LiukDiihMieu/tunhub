@@ -15,6 +15,8 @@ from typing import Any
 import yaml
 
 SHARED_FILE = "services.yaml"
+# The dashboard's port when hub.port is not set (tunhub's release date, 11-10).
+DEFAULT_HUB_PORT = 1110
 LOCAL_FILE = "local.yaml"
 
 SERVICE_TYPES = ("http", "https", "tcp")
@@ -204,7 +206,7 @@ def format_endpoint(host: str, port: int) -> str:
 def _parse_hub(raw: dict[str, Any]) -> HubSettings:
     return HubSettings(
         listen_host=str(raw.get("listen", "127.0.0.1")),
-        port=_check_port(raw.get("port", 8765), "hub.port"),
+        port=_check_port(raw.get("port", DEFAULT_HUB_PORT), "hub.port"),
         hostname=str(raw.get("hostname", "hub.localhost")).lower(),
         open_timeout=_seconds(raw, "open_timeout", 40, "hub"),
     )
