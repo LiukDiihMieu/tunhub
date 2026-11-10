@@ -245,6 +245,7 @@ def parse_config(raw: dict[str, Any]) -> Config:
 
     _check_port_conflicts(hub, services)
     _check_hostname_conflicts(hub, services)
+    _warn_remote_ip_hostnames(hub, services, warnings)
     return Config(hub=hub, tunnel=tunnel, services=services, warnings=tuple(warnings))
 
 
@@ -304,7 +305,14 @@ def _parse_tunnel(raw: dict[str, Any]) -> TunnelSettings:
 
     options = dict(DEFAULT_SSH_OPTIONS)
     for key, value in _mapping(raw.get("ssh_options"), "tunnel.ssh_options").items():
-        options[str(key)] = _ssh_option_value(value)
+        key = str(key)
+        if value is None:  # not set: back to tunhub's default, if it has one
+            if key in DEFAULT_SSH_OPTIONS:
+                options[key] = DEFAULT_SSH_OPTIONS[key]
+            else:
+                options.pop(key, None)
+            continue
+        options[key] = _ssh_option_value(value, f"tunnel.ssh_options.{key}")
 
     return TunnelSettings(
         ssh_command=tuple(command),
@@ -383,6 +391,9 @@ def _parse_route(item: Any, where: str, warnings: list[str]) -> Route:
         alias = _text(item, "ssh", "", where)
         if not alias:
             raise ConfigError(f"{where}.ssh: needs a host alias from ~/.ssh/config")
+        if alias.startswith("-"):
+            # ssh would read it as an option (e.g. -oProxyCommand=...).
+            raise ConfigError(f"{where}.ssh: a host alias cannot start with '-'")
         return Route(kind="ssh", target_host=host, target_port=port, ssh_host=alias, label=label)
 
     raise ConfigError(f"{where}: expected 'direct' or 'ssh'")
@@ -393,13 +404,14 @@ def _check_required_version(spec: Any) -> None:
     version = __version__
     if spec is None:
         return
-    if not isinstance(spec, str):
+    if not isinstance(spec, str) or not spec.strip():
         raise ConfigError(f"requires_tunhub: expected a version range such as '>=0.1.5', got {spec!r}")
     try:
         allowed = SpecifierSet(spec)
     except InvalidSpecifier:
         raise ConfigError(f"requires_tunhub: {spec!r} is not a version range such as '>=0.1.5'") from None
-    # prereleases: a development build of a matching version counts as that version.
+    # prereleases: a development build may match too (0.1.5.dev1 matches >=0.1.5.dev0
+    # and >=0.1, but not >=0.1.5, which it comes before).
     if not allowed.contains(version, prereleases=True):
         raise ConfigError(f"this config requires tunhub {spec}, but this is tunhub {version}; please upgrade tunhub")
 
@@ -418,6 +430,18 @@ def _warn_unknown_keys(raw: dict[str, Any], known: tuple[str, ...], where: str, 
         if close:
             message += f"; did you mean '{close[0]}'?"
         warnings.append(message)
+
+
+def _warn_remote_ip_hostnames(hub: HubSettings, services: dict[str, Service], warnings: list[str]) -> None:
+    """An IP address as host name must be this machine, or the browser skips tunhub."""
+    users = [("hub.hostname", hub.hostname)]
+    users += [(f"service '{s.id}'.hostname", s.hostname) for s in services.values() if s.is_web]
+    for where, name in users:
+        if _is_ip(name) and not ipaddress.ip_address(name).is_loopback:
+            warnings.append(
+                f"{where}: {name} is another machine, so the browser would connect there directly and "
+                "bypass tunhub; use 127.0.0.1 or a name ending in .localhost"
+            )
 
 
 def _is_loopback_host(host: str) -> bool:
@@ -556,8 +580,8 @@ def _check_listen(host: str) -> str:
         loopback = False
     if not loopback:
         raise ConfigError(
-            f"hub.listen: {host!r} is not a loopback address (e.g. 127.0.0.1); the dashboard has no "
-            "login, so it must not be reachable from other machines"
+            f"hub.listen: {host!r} is not allowed; use 127.0.0.1 or ::1 (the dashboard has no "
+            "login, so it must not be reachable from other machines)"
         )
     return host
 
@@ -601,8 +625,10 @@ def _check_port(value: Any, where: str) -> int:
     return port
 
 
-def _ssh_option_value(value: Any) -> str:
+def _ssh_option_value(value: Any, where: str) -> str:
     # YAML turns `yes` into True; ssh wants yes/no.
     if isinstance(value, bool):
         return "yes" if value else "no"
+    if not isinstance(value, (str, int, float)):
+        raise ConfigError(f"{where}: expected a single value, got {value!r}")
     return str(value)

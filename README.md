@@ -247,7 +247,8 @@ Start-ScheduledTask -TaskName TunHub
 
 ## Security
 
-- The dashboard and all forwards listen on 127.0.0.1 only.
+- The dashboard and all forwards listen on this machine only (127.0.0.1;
+  `hub.listen` accepts only loopback addresses such as `::1`).
 - Requests whose `Host` is not the dashboard's own host name are rejected, which
   blocks DNS rebinding.
 - State-changing API calls need a custom header and a same-origin `Origin`, so

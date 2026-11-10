@@ -4,9 +4,10 @@ Format: one ``<ip> <mac>`` per line; ``#`` starts a comment; several lines for
 one IP mean several trusted MACs (e.g. a machine with wired and Wi-Fi NICs).
 
 tunhub learns on first use (ssh's ``StrictHostKeyChecking accept-new``) by
-appending a line; it never rewrites the file, so comments and manual edits
-survive. ``tunhub forget <ip>`` removes the lines of one IP, like
-``ssh-keygen -R``. The file is re-read when it changes on disk.
+appending a line. Only ``tunhub forget <ip>`` rewrites the file: it removes
+the lines of that IP, like ``ssh-keygen -R``, and keeps everything else
+(comments, manual edits, lines it does not understand). The file is re-read
+when it changes on disk.
 """
 
 from __future__ import annotations

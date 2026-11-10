@@ -310,7 +310,7 @@ def test_listen_on_loopback_is_accepted(listen):
 
 @pytest.mark.parametrize("listen", ["0.0.0.0", "::", "192.168.1.5", "localhost", "example.com"])
 def test_listen_off_this_machine_is_rejected(listen):
-    with pytest.raises(ConfigError, match="loopback"):
+    with pytest.raises(ConfigError, match="use 127.0.0.1 or ::1"):
         parse_config({"hub": {"listen": listen}})
 
 
@@ -463,7 +463,7 @@ def test_required_version_not_met_is_an_error_before_anything_else(monkeypatch):
         parse_config(raw)
 
 
-def test_development_build_counts_as_its_version(monkeypatch):
+def test_development_build_can_match(monkeypatch):
     monkeypatch.setattr("tunhub.config.__version__", "0.1.5.dev0")
     parse_config({"requires_tunhub": ">=0.1.5.dev0"})
     parse_config({"requires_tunhub": ">=0.1"})
@@ -515,3 +515,49 @@ def test_unusable_machine_name_reads_no_local_file_and_warns(tmp_path, machine):
     config = load_config(tmp_path, machine=machine)
     assert config.local_path is None and not config.local_found
     assert any("cannot be used in a file name" in w for w in config.warnings)
+
+
+# ---------------------------------------------------------------------------
+# Review fixes
+
+
+def test_ssh_option_null_means_not_set():
+    shared = {"ssh_options": {"ConnectTimeout": 30, "ProxyJump": "gate"}}
+    merged = {"ssh_options": {"ConnectTimeout": None, "ProxyJump": None}}  # what a local file would undo
+    assert dict(parse_config({"tunnel": shared}).tunnel.ssh_options)["ConnectTimeout"] == "30"
+    options = dict(parse_config({"tunnel": merged}).tunnel.ssh_options)
+    assert options["ConnectTimeout"] == "10"  # tunhub's default again
+    assert "ProxyJump" not in options
+
+
+@pytest.mark.parametrize("value", [["a", "b"], {"a": 1}])
+def test_ssh_option_needs_a_single_value(value):
+    with pytest.raises(ConfigError, match="tunnel.ssh_options.ProxyJump"):
+        parse_config({"tunnel": {"ssh_options": {"ProxyJump": value}}})
+
+
+@pytest.mark.parametrize("spec", ["", "  "])
+def test_empty_required_version_is_rejected(spec):
+    with pytest.raises(ConfigError, match="requires_tunhub"):
+        parse_config({"requires_tunhub": spec})
+
+
+def test_ssh_alias_cannot_look_like_an_option():
+    route = {"ssh": "-oProxyCommand=touch /tmp/x", "remote": 5000}
+    with pytest.raises(ConfigError, match="cannot start with '-'"):
+        parse_config({"services": {"dsm": _service(routes=[route])}})
+
+
+def test_ip_host_name_of_another_machine_is_a_warning():
+    raw = {
+        "hub": {"hostname": "192.168.1.4"},
+        "services": {
+            "lan": _service(hostname="192.168.1.5"),
+            "loop": {**_service(hostname="127.0.0.1"), "local_port": 15001},
+            "rdp": {**_service(hostname="192.168.1.6", type="tcp"), "local_port": 15002},  # host name unused
+        },
+    }
+    warnings = parse_config(raw).warnings
+    assert len(warnings) == 2
+    assert warnings[0].startswith("hub.hostname: 192.168.1.4 is another machine")
+    assert warnings[1].startswith("service 'lan'.hostname: 192.168.1.5 is another machine")
