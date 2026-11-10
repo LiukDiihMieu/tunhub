@@ -382,12 +382,42 @@ function updateFavicon(services) {
   let status = null;
   if (services.some((s) => s.state === "retrying")) status = "failing";
   else if (services.some((s) => s.state === "connecting")) status = "connecting";
+  setFaviconStatus(status);
+}
+
+function setFaviconStatus(status) {
   if (!faviconSvg || status === faviconStatus) return;
   faviconStatus = status;
   const dot = status
     ? `<circle cx="13" cy="3" r="2.75" fill="${FAVICON_DOTS[status]}" stroke="#0a1024" stroke-width="1"/>`
     : "";
   $("favicon").href = `data:image/svg+xml,${encodeURIComponent(faviconSvg.replace("</svg>", `${dot}</svg>`))}`;
+}
+
+// --------------------------------------------------------------- offline
+
+// tunhub itself is not answering (stopped, crashed, restarting). One failed
+// poll is ignored so that a quick restart does not flash the warning.
+let failedPolls = 0;
+let offlineSince = null;
+
+function setOffline(offline) {
+  failedPolls = offline ? failedPolls + 1 : 0;
+  const show = failedPolls >= 2;
+  if (show && !offlineSince) offlineSince = new Date();
+  if (!show) offlineSince = null;
+
+  const banner = $("offline");
+  banner.hidden = !show;
+  document.body.classList.toggle("offline", show);
+  if (show) {
+    const since = offlineSince.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    banner.textContent =
+      `tunhub is not reachable (since ${since}). It may have stopped or be restarting; ` +
+      "this page keeps retrying. The services below show their last known state.";
+    $("summary").textContent = "offline";
+    setFaviconStatus("failing");
+  }
 }
 
 // ------------------------------------------------------------------ poll
@@ -398,9 +428,10 @@ async function poll() {
     const response = await fetch("/api/state");
     data = await response.json();
   } catch {
-    $("summary").textContent = "hub not reachable";
+    setOffline(true);
     return;
   }
+  setOffline(false);
   hubUrl = data.hub;
   renderSetup(data.config, data.services.length === 0);
   $("client").textContent = `on ${data.client}`;

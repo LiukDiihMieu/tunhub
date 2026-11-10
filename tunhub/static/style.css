@@ -94,6 +94,8 @@ body {
   white-space: pre-wrap;
 }
 .banner.bad { border-color: var(--bad); color: var(--bad); }
+/* tunhub is not answering: the tiles show a stale state. */
+body.offline .grid { opacity: 0.45; }
 
 /* First start: a centred guide on the page background, not a card. */
 .setup { max-width: 760px; margin: 56px auto 48px; padding: 0 24px; }
