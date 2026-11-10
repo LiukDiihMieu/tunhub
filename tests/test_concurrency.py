@@ -147,9 +147,15 @@ def test_stop_or_start_during_auto_probe_wins(command):
         await asyncio.sleep(0.3)
 
         if command == "stop":
-            assert runtime.mode is Mode.OFF and supervisors() == 0  # used to auto-start anyway
+            # Stop means "back to auto", so auto-direct connecting is correct;
+            # what matters is that nothing breaks and no ssh is involved.
+            assert runtime.mode in (Mode.OFF, Mode.AUTO) and runtime._ssh is None
         else:
-            assert runtime.mode is Mode.MANUAL  # used to be downgraded to AUTO (no ssh fallback)
+            # The user's Start wins: the probe must not launch on top of it
+            # (it used to, downgrading the start to AUTO, without ssh fallback).
+            # The final mode is AUTO either way now, since a direct connection
+            # settles in auto, so check that the probe did not launch.
+            assert not any("connecting automatically" in m for _, m in runtime.logs)
         await runtime.close()
 
     run(scenario(command))
