@@ -30,7 +30,7 @@ takes you there. When you are on the same LAN, it skips SSH and connects directl
 
 - **One click from the hub.** Click a tile and the service opens in a new tab,
   with the tunnel already up.
-- **Bookmarks that just work.** Save `http://hub.localhost:8765/open/nas` in your
+- **Bookmarks that just work.** Save `http://hub.localhost:1110/open/nas` in your
   favourites bar and use it like any public website. If the tunnel is down,
   tunhub opens it on the way; you never think about it.
 - **Direct when it can, SSH when it must.** On the same LAN, tunhub connects
@@ -67,7 +67,7 @@ Then:
 ```bash
 tunhub init                     # writes a commented example config
 $EDITOR ~/.config/tunhub/services.yaml
-tunhub                          # then open http://hub.localhost:8765
+tunhub                          # then open http://hub.localhost:1110
 tunhub service install          # optional: start automatically at login
 ```
 
@@ -121,7 +121,7 @@ Every web service has two URLs, both shown in its ⋯ panel:
 
 | | example | what it is for |
 |---|---|---|
-| **Bookmark** | `http://hub.localhost:8765/open/nas` | Save this one in your browser. Opening it connects the service first (starting ssh if needed), then forwards you to the address. |
+| **Bookmark** | `http://hub.localhost:1110/open/nas` | Save this one in your browser. Opening it connects the service first (starting ssh if needed), then forwards you to the address. |
 | **Address** | `http://nas.localhost:15000` | Where the service itself lives. Your password manager and cookies are tied to it, and it never changes with the route. It only loads while the service is connected. |
 
 So you bookmark the hub link, and your password manager remembers the login

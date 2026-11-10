@@ -199,7 +199,7 @@ def test_open_rejects_requests_from_other_pages(setup, headers, allowed):
 
 def test_dashboard_starts_without_config_and_picks_it_up_on_reload(tmp_path):
     hub = Hub(tmp_path)  # no services.yaml yet
-    client = TestClient(create_app(hub), base_url="http://hub.localhost:8765", follow_redirects=False)
+    client = TestClient(create_app(hub), base_url="http://hub.localhost:1110", follow_redirects=False)
     with client:
         state = client.get("/api/state").json()
         assert state["services"] == []
@@ -217,7 +217,7 @@ def test_dashboard_starts_without_config_and_picks_it_up_on_reload(tmp_path):
 
 def test_init_command_is_plain_for_the_default_config_dir(tmp_path, monkeypatch):
     monkeypatch.setattr("tunhub.app.default_config_dir", lambda: tmp_path)
-    client = TestClient(create_app(Hub(tmp_path)), base_url="http://hub.localhost:8765")
+    client = TestClient(create_app(Hub(tmp_path)), base_url="http://hub.localhost:1110")
     with client:
         assert client.get("/api/state").json()["config"]["init_command"] == "tunhub init"
 

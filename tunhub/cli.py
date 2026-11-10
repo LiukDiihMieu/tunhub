@@ -10,7 +10,7 @@ from importlib import resources
 from pathlib import Path
 
 from . import __version__
-from .config import LOCAL_FILE, SHARED_FILE, ConfigError
+from .config import DEFAULT_HUB_PORT, LOCAL_FILE, SHARED_FILE, ConfigError
 from .known_macs import FILE_NAME as KNOWN_MACS_FILE
 from .known_macs import KnownMacs
 from .winjob import kill_children_on_exit
@@ -132,7 +132,7 @@ def cmd_init(args: argparse.Namespace) -> int:
 
     print(f"created {target}")
     print(f"created {config_dir / 'local.example.yaml'}")
-    print("next: edit the example services, then run `tunhub` and open http://hub.localhost:8765")
+    print(f"next: edit the example services, then run `tunhub` and open http://hub.localhost:{DEFAULT_HUB_PORT}")
     return 0
 
 
