@@ -43,19 +43,19 @@ class State(str, Enum):
 class Mode(str, Enum):
     """Why the service is (or is not) running.
 
-    For the user there are two states: "auto" (OFF or AUTO) and "on" (MANUAL).
+    For the user there are two states: "auto" (OFF or AUTO) and "on" (ON).
 
     OFF:    not running; auto-direct (if enabled) brings it up when it can.
     AUTO:   started by the background probe; direct routes only. When the
             direct route is lost the service goes back to OFF (never ssh).
-    MANUAL: opened by the user (tile, bookmark, Start, autostart) while it
+    ON:     opened by the user (tile, bookmark, Start, autostart) while it
             was not up; all routes are tried, including ssh, and failures
             are retried. Stop returns it to auto.
     """
 
     OFF = "off"
     AUTO = "auto"
-    MANUAL = "manual"
+    ON = "on"
 
 
 class RouteFailed(Exception):
@@ -124,18 +124,18 @@ class ServiceRuntime:
         A service that auto-direct already has up stays in auto: it is
         reachable directly, so there is nothing to keep up, and it must not
         fall back to ssh later (e.g. when a laptop leaves home). Otherwise it
-        is kept up manually, with ssh as a fallback, until Stop.
+        is on: kept up, with ssh as a fallback, until Stop.
         """
         if self._closed:
             return
         if self.mode is Mode.AUTO and self.state is State.UP:
             return
         if self.mode is Mode.AUTO:
-            self.log("now kept up manually (ssh fallback enabled)")
-        self._launch(Mode.MANUAL)
+            self.log("now on: kept up, with ssh fallback")
+        self._launch(Mode.ON)
 
     async def stop(self) -> None:
-        """End a manual connection and return to auto.
+        """End an "on" connection and return to auto.
 
         There is no "off and stay off": auto-direct brings the service back
         when a direct route is reachable (it only listens locally; nothing
@@ -354,7 +354,7 @@ class ServiceRuntime:
                     if self.mode is Mode.AUTO:
                         self._go_idle("auto-connect failed")
                         break
-                    # Upgraded to manual during the attempt: try all routes now.
+                    # Upgraded to on during the attempt: try all routes now.
                     continue
                 else:
                     await self._set_state(State.RETRYING, attempt_finished=True)
@@ -380,15 +380,15 @@ class ServiceRuntime:
                 self._task = asyncio.create_task(self._supervise(), name=f"service:{self.service.id}")
 
     def _settle_direct_in_auto(self) -> None:
-        """A manual connection that came up on a direct route belongs to auto.
+        """An "on" connection that came up on a direct route belongs to auto.
 
         Direct only means "listening locally", so there is nothing to keep up,
-        and staying manual would make a laptop fall back to ssh after leaving
-        home. Only ssh connections stay manual (until Stop). Services without
-        auto-direct have no auto mode and stay manual.
+        and staying on would make a laptop fall back to ssh after leaving
+        home. Only ssh connections stay on (until Stop). Services without
+        auto-direct have no auto mode and stay on.
         """
         route = self.service.routes[self.active_route] if self.active_route is not None else None
-        if self.mode is Mode.MANUAL and route is not None and route.kind == "direct" and self._watcher is not None:
+        if self.mode is Mode.ON and route is not None and route.kind == "direct" and self._watcher is not None:
             self.mode = Mode.AUTO
             self.log("on a direct route: back to auto (no ssh fallback)")
 

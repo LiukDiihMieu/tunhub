@@ -41,7 +41,7 @@ def test_start_during_stop_wins_and_stop_returns():
 
         await asyncio.wait_for(stopping, 5)  # used to hang forever
         await wait_until(lambda: runtime.state is State.UP, runtime=runtime)
-        assert runtime.mode is Mode.MANUAL and supervisors() == 1
+        assert runtime.mode is Mode.ON and supervisors() == 1
 
         await runtime.stop()
         assert supervisors() == 0 and runtime.state is State.OFF

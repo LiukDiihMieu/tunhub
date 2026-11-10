@@ -197,9 +197,9 @@ function updateTile(tile, service) {
   tcpAddress.hidden = Boolean(service.url);
   tcpAddress.textContent = service.address;
 
-  // Only a manual connection can be stopped (back to auto); auto-direct only
+  // Only an "on" connection can be stopped (back to auto); auto-direct only
   // listens locally and comes back by itself.
-  q(".stop").hidden = service.mode !== "manual";
+  q(".stop").hidden = service.mode !== "on";
 }
 
 // ---------------------------------------------------------------- drawer
@@ -278,11 +278,11 @@ function updateDrawer() {
   $("d-route-active").textContent = active;
 
   const toggle = $("d-toggle");
-  const manual = service.mode === "manual";
-  toggle.hidden = !manual && service.state === "up"; // auto-direct: nothing to do
-  toggle.textContent = manual ? "Stop" : "Connect";
-  toggle.title = manual ? "End this connection and go back to auto" : "Connect now, with ssh if needed";
-  toggle.classList.toggle("stop", manual);
+  const on = service.mode === "on";
+  toggle.hidden = !on && service.state === "up"; // auto-direct: nothing to do
+  toggle.textContent = on ? "Stop" : "Connect";
+  toggle.title = on ? "End this connection and go back to auto" : "Connect now, with ssh if needed";
+  toggle.classList.toggle("stop", on);
 
   $("d-refresh-icon").hidden = !service.url;
 }
@@ -308,7 +308,7 @@ document.addEventListener("keydown", (event) => {
 $("d-toggle").addEventListener("click", async () => {
   const service = drawerService();
   if (!service) return;
-  const action = service.mode === "manual" ? "stop" : "start";
+  const action = service.mode === "on" ? "stop" : "start";
   try { await api(`/api/services/${service.id}/${action}`); } catch (err) { showBanner(err.message, true); }
   poll();
 });

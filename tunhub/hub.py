@@ -148,7 +148,7 @@ class Hub:
         old_runtimes = self.runtimes
         new_runtimes: dict[str, ServiceRuntime] = {}
         to_stop: list[ServiceRuntime] = []
-        to_start: list[ServiceRuntime] = []  # manual starts carried over
+        to_start: list[ServiceRuntime] = []  # "on" services carried over
 
         for service_id, service in new_config.services.items():
             old = old_runtimes.get(service_id)
@@ -169,7 +169,7 @@ class Hub:
                 if old.pinned_route is not None and old.pinned_route < len(service.routes):
                     runtime.pinned_route = old.pinned_route
                 # An auto-direct service is picked up again by its new probe.
-                if old.mode is Mode.MANUAL:
+                if old.mode is Mode.ON:
                     to_start.append(runtime)
 
         for service_id, old in old_runtimes.items():

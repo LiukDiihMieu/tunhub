@@ -295,7 +295,7 @@ def test_unreadable_file_falls_back_to_ssh_instead_of_crashing(tmp_path):
         runtime = await runtime_with_guard(tmp_path, {"127.0.0.1": NAS_MAC})
         runtime.start()
         await wait_until(lambda: runtime.state is State.UP, runtime=runtime)
-        assert runtime.active_route == 1 and runtime.mode is Mode.MANUAL  # ssh, still supervised
+        assert runtime.active_route == 1 and runtime.mode is Mode.ON  # ssh, still supervised
         assert "internal error" not in (runtime.last_error or "")
         await runtime.stop()
 
