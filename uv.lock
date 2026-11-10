@@ -545,6 +545,7 @@ name = "tunhub"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
+    { name = "packaging" },
     { name = "pyyaml" },
     { name = "uvicorn" },
 ]
@@ -559,6 +560,7 @@ dev = [
 requires-dist = [
     { name = "fastapi", specifier = ">=0.110" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
+    { name = "packaging", specifier = ">=22" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "uvicorn", specifier = ">=0.29" },

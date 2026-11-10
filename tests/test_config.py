@@ -443,3 +443,37 @@ def test_loopback_direct_route_in_local_file_is_fine(tmp_path):
     (tmp_path / "services.yaml").write_text("services:\n  a: {local_port: 15000, routes: [{ssh: nas, remote: 5000}]}\n")
     (tmp_path / "local.yaml").write_text("services:\n  a: {routes: [{direct: '127.0.0.1:5000'}]}\n")
     assert load_config(tmp_path).warnings == ()
+
+
+# ---------------------------------------------------------------------------
+# requires_tunhub
+
+
+@pytest.mark.parametrize("spec", [None, ">=0.1", ">=0.1,<9", "==0.1.*", "~=0.1.0"])
+def test_required_version_is_met(spec, monkeypatch):
+    monkeypatch.setattr("tunhub.config.__version__", "0.1.3")
+    parse_config({"requires_tunhub": spec})
+
+
+def test_required_version_not_met_is_an_error_before_anything_else(monkeypatch):
+    monkeypatch.setattr("tunhub.config.__version__", "0.1.3")
+    # The unknown section is from the newer version; the version error comes first.
+    raw = {"requires_tunhub": ">=0.4", "services": {"x": {"new_style": True}}}
+    with pytest.raises(ConfigError, match=r"requires tunhub >=0.4, but this is tunhub 0.1.3; please upgrade"):
+        parse_config(raw)
+
+
+def test_development_build_counts_as_its_version(monkeypatch):
+    monkeypatch.setattr("tunhub.config.__version__", "0.1.5.dev0")
+    parse_config({"requires_tunhub": ">=0.1.5.dev0"})
+    parse_config({"requires_tunhub": ">=0.1"})
+
+
+@pytest.mark.parametrize("spec", ["0.1", "newest", 0.1, True, [">=0.1"]])
+def test_invalid_required_version(spec):
+    with pytest.raises(ConfigError, match="requires_tunhub"):
+        parse_config({"requires_tunhub": spec})
+
+
+def test_required_version_is_not_an_unknown_key():
+    assert parse_config({"requires_tunhub": ">=0.1"}).warnings == ()

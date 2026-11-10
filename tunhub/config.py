@@ -15,6 +15,9 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from packaging.specifiers import InvalidSpecifier, SpecifierSet
+
+from . import __version__
 
 SHARED_FILE = "services.yaml"
 # The dashboard's port when hub.port is not set (tunhub's release date, 11-10).
@@ -29,7 +32,7 @@ _DNS_LABEL_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 
 # Known keys per section. Unknown keys are warnings, not errors, so that an
 # older tunhub can still read a config written for a newer one.
-TOP_KEYS = ("hub", "tunnel", "services")
+TOP_KEYS = ("requires_tunhub", "hub", "tunnel", "services")
 HUB_KEYS = ("listen", "port", "hostname", "open_timeout")
 TUNNEL_KEYS = (
     "ssh_command",
@@ -188,6 +191,8 @@ def load_config(config_dir: Path) -> Config:
 
 
 def parse_config(raw: dict[str, Any]) -> Config:
+    # First: a config for a newer tunhub may not parse at all.
+    _check_required_version(raw.get("requires_tunhub"))
     warnings: list[str] = []
     _warn_unknown_keys(raw, TOP_KEYS, "config", warnings)
     hub_raw = _mapping(raw.get("hub"), "hub")
@@ -349,6 +354,22 @@ def _parse_route(item: Any, where: str, warnings: list[str]) -> Route:
         return Route(kind="ssh", target_host=host, target_port=port, ssh_host=alias, label=label)
 
     raise ConfigError(f"{where}: expected 'direct' or 'ssh'")
+
+
+def _check_required_version(spec: Any) -> None:
+    """`requires_tunhub: ">=0.1.5"`: the tunhub versions this config is written for (PEP 440)."""
+    version = __version__
+    if spec is None:
+        return
+    if not isinstance(spec, str):
+        raise ConfigError(f"requires_tunhub: expected a version range such as '>=0.1.5', got {spec!r}")
+    try:
+        allowed = SpecifierSet(spec)
+    except InvalidSpecifier:
+        raise ConfigError(f"requires_tunhub: {spec!r} is not a version range such as '>=0.1.5'") from None
+    # prereleases: a development build of a matching version counts as that version.
+    if not allowed.contains(version, prereleases=True):
+        raise ConfigError(f"this config requires tunhub {spec}, but this is tunhub {version}; please upgrade tunhub")
 
 
 # ---------------------------------------------------------------------------
