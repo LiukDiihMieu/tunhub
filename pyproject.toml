@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "tunhub"
 dynamic = ["version"]
-description = "One local dashboard for your SSH-tunnelled and LAN services: bookmark once, open from anywhere."
+description = "Open the web UIs on your private network like any public website: tunhub sets up the SSH forwarding for you."
 readme = "README.md"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
@@ -16,15 +16,28 @@ dependencies = [
     "uvicorn>=0.29",
     "PyYAML>=6.0",
 ]
-keywords = ["ssh", "tunnel", "port-forwarding", "homelab", "dashboard", "self-hosted"]
+keywords = [
+    "ssh", "ssh-tunnel", "port-forwarding", "self-hosted", "homelab",
+    "dashboard", "localhost", "remote-access", "jupyter", "nas",
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Web Environment",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
     "Intended Audience :: System Administrators",
-    "Operating System :: OS Independent",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Internet :: Proxy Servers",
     "Topic :: System :: Networking",
+    "Topic :: Utilities",
 ]
 
 [project.optional-dependencies]
@@ -36,6 +49,7 @@ tunhub = "tunhub.cli:main"
 [project.urls]
 Homepage = "https://github.com/LiukDiihMieu/tunhub"
 Issues = "https://github.com/LiukDiihMieu/tunhub/issues"
+Changelog = "https://github.com/LiukDiihMieu/tunhub/blob/main/CHANGELOG.md"
 
 [tool.hatch.version]
 path = "tunhub/__init__.py"
