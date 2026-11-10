@@ -20,17 +20,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
-      # Linux covers every Python version. macOS and Windows minutes are billed
-      # at 10x and 2x on private repos, so they only run the oldest and newest
-      # versions: platform issues rarely depend on the Python minor version.
+      # Every supported Python on every platform (free for public repositories).
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         python: ["3.10", "3.11", "3.12", "3.13", "3.14"]
-        include:
-          - { os: macos-latest, python: "3.10" }
-          - { os: macos-latest, python: "3.14" }
-          - { os: windows-latest, python: "3.10" }
-          - { os: windows-latest, python: "3.14" }
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
