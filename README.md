@@ -113,17 +113,29 @@ under the address, without any extra setup.
 
 ### Connection behaviour
 
-- **Manual connections** (tile click, bookmark, Start, `autostart: true`) try the
-  routes in order and keep the service up. If ssh dies or a direct target
-  disappears, tunhub tries all routes again from the first; while every route
-  fails, retries back off from 2 s to 60 s.
-- **Auto-direct** (on by default): every 15 s, tunhub probes the direct routes of
-  idle services and brings a service up as soon as one is reachable. Auto
-  connections only ever use direct routes and never start ssh. When the direct
-  route is lost, an auto connection simply goes back to off.
-- **Stop** on a tile pauses auto-direct for that service until you start it
-  again. **Disconnect SSH** in the top bar stops every service that uses or is
-  trying ssh, keeps direct connections up and does not pause auto-direct.
+A service is either in **auto** (the default) or **on**:
+
+- **Auto**: every 15 s, tunhub probes the direct routes of idle services and
+  brings a service up as soon as one is reachable (cyan, "Direct").
+  This only opens the local port; nothing is kept open to the target until
+  you use it. Auto never starts ssh: when the direct route is lost, the
+  service simply goes back to off.
+- **On**: opening a service that is *not* up (tile click, bookmark, Start,
+  `autostart: true`) tries the routes in order, including ssh. If it comes up
+  on a direct route, it is simply in auto; if it needs ssh (purple, "SSH"),
+  it stays on: tunhub keeps it up, and if ssh dies it tries all routes again
+  from the first, backing off from 2 s to 60 s while every route fails. A
+  working ssh connection is kept even if a direct route becomes reachable,
+  so live sessions are not cut; when it drops (e.g. the laptop changed
+  networks), the reconnect prefers the direct route and the service is back
+  in auto. Opening a service that is already up just opens it, so a laptop
+  that leaves home does not start ssh tunnels it no longer needs.
+- **Stop** (shown only for a service that is on) ends the connection and
+  returns the service to auto; at home it is back on the direct route
+  within a second. A service with `auto_direct: false` has no auto mode, so
+  any connection to it is on until you stop it. There is no "stay off": set `auto_direct: false` for a
+  service that should never connect by itself. **Disconnect SSH** in the
+  top bar does the same for every service that uses or is trying ssh.
 - After a network change, ssh notices its dead connection within about 45 s
   (keep-alive). To switch immediately, click Stop and then the tile.
 

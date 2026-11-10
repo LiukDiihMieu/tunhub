@@ -62,21 +62,19 @@ function activeRoute(service) {
   return service.active_route === null ? null : service.routes[service.active_route];
 }
 
-/** Short human status, e.g. "Direct · auto", "SSH", "Off · auto paused". */
+/** Short human status: "Direct", "SSH", "Connecting…", "Off", ... */
 function statusText(service) {
   switch (service.state) {
     case "up": {
       const route = activeRoute(service);
-      let text = route && route.kind === "direct" ? "Direct" : "SSH";
-      if (service.mode === "auto") text += " · auto";
-      return text;
+      return route && route.kind === "direct" ? "Direct" : "SSH";
     }
     case "connecting":
       return "Connecting…";
     case "retrying":
       return "Failed · retrying";
     default:
-      return service.auto_paused ? "Off · auto paused" : "Off";
+      return "Off";
   }
 }
 
@@ -199,7 +197,9 @@ function updateTile(tile, service) {
   tcpAddress.hidden = Boolean(service.url);
   tcpAddress.textContent = service.address;
 
-  q(".stop").hidden = !service.desired;
+  // Only a manual connection can be stopped (back to auto); auto-direct only
+  // listens locally and comes back by itself.
+  q(".stop").hidden = service.mode !== "manual";
 }
 
 // ---------------------------------------------------------------- drawer
@@ -269,8 +269,11 @@ function updateDrawer() {
   $("d-route-active").textContent = active;
 
   const toggle = $("d-toggle");
-  toggle.textContent = service.desired ? "Stop" : "Start";
-  toggle.classList.toggle("stop", service.desired);
+  const manual = service.mode === "manual";
+  toggle.hidden = !manual && service.state === "up"; // auto-direct: nothing to do
+  toggle.textContent = manual ? "Stop" : "Connect";
+  toggle.title = manual ? "End this connection and go back to auto" : "Connect now, with ssh if needed";
+  toggle.classList.toggle("stop", manual);
 
   $("d-refresh-icon").hidden = !service.url;
 }
@@ -296,7 +299,7 @@ document.addEventListener("keydown", (event) => {
 $("d-toggle").addEventListener("click", async () => {
   const service = drawerService();
   if (!service) return;
-  const action = service.desired ? "stop" : "start";
+  const action = service.mode === "manual" ? "stop" : "start";
   try { await api(`/api/services/${service.id}/${action}`); } catch (err) { showBanner(err.message, true); }
   poll();
 });

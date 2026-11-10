@@ -161,7 +161,6 @@ class Hub:
                 messages.append(f"changed {service_id}")
                 to_stop.append(old)
                 runtime.logs.extend(old.logs)
-                runtime.manually_stopped = old.manually_stopped
                 if old.pinned_route is not None and old.pinned_route < len(service.routes):
                     runtime.pinned_route = old.pinned_route
                 # An auto-direct service is picked up again by its new probe.

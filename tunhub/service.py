@@ -43,11 +43,14 @@ class State(str, Enum):
 class Mode(str, Enum):
     """Why the service is (or is not) running.
 
-    OFF:    not running.
+    For the user there are two states: "auto" (OFF or AUTO) and "on" (MANUAL).
+
+    OFF:    not running; auto-direct (if enabled) brings it up when it can.
     AUTO:   started by the background probe; direct routes only. When the
             direct route is lost the service goes back to OFF (never ssh).
-    MANUAL: started by the user (Start / Open / bookmark / autostart); all
-            routes are tried and failures are retried until stopped.
+    MANUAL: opened by the user (tile, bookmark, Start, autostart) while it
+            was not up; all routes are tried, including ssh, and failures
+            are retried. Stop returns it to auto.
     """
 
     OFF = "off"
@@ -72,13 +75,12 @@ class ServiceRuntime:
         self.logs: deque[tuple[float, str]] = deque(maxlen=300)
 
         self.mode = Mode.OFF
-        # A manual Stop pauses auto-direct until the next manual Start.
-        self.manually_stopped = False
         # Set by close(): the runtime was replaced or the hub is exiting, so
         # nothing may start it again.
         self._closed = False
         self._task: asyncio.Task | None = None
         self._watcher: asyncio.Task | None = None
+        self._probe_now = asyncio.Event()  # cut the auto-direct wait short
         self._wake = asyncio.Event()  # cut a retry back-off short
         self._down = asyncio.Event()  # tear the active route down
         self._down_reason = ""
@@ -117,18 +119,31 @@ class ServiceRuntime:
         await self._halt("hub shutting down")
 
     def start(self) -> None:
-        """Manual start; also upgrades a running auto-direct service to manual."""
+        """Open on demand (tile, bookmark, Start, autostart).
+
+        A service that auto-direct already has up stays in auto: it is
+        reachable directly, so there is nothing to keep up, and it must not
+        fall back to ssh later (e.g. when a laptop leaves home). Otherwise it
+        is kept up manually, with ssh as a fallback, until Stop.
+        """
         if self._closed:
             return
-        self.manually_stopped = False
+        if self.mode is Mode.AUTO and self.state is State.UP:
+            return
         if self.mode is Mode.AUTO:
             self.log("now kept up manually (ssh fallback enabled)")
         self._launch(Mode.MANUAL)
 
     async def stop(self) -> None:
-        """Manual stop; pauses auto-direct until the next manual start."""
-        self.manually_stopped = True
-        await self._halt("stopped by user")
+        """End a manual connection and return to auto.
+
+        There is no "off and stay off": auto-direct brings the service back
+        when a direct route is reachable (it only listens locally; nothing
+        is kept open to the target). To turn that off, use `auto_direct:
+        false` in the config.
+        """
+        await self._halt("stopped by user; back to auto")
+        self._probe_now.set()  # at home: back on the direct route right away
 
     @property
     def uses_ssh(self) -> bool:
@@ -139,8 +154,9 @@ class ServiceRuntime:
         return not (self.state is State.UP and route is not None and route.kind == "direct")
 
     async def disconnect_ssh(self) -> None:
-        """Stop without pausing auto-direct; it may still come back via direct."""
+        """Like stop(): back to auto; it may come back via direct."""
         await self._halt("all ssh connections disconnected by user")
+        self._probe_now.set()
 
     def set_pinned_route(self, index: int | None) -> None:
         if index is not None and not 0 <= index < len(self.service.routes):
@@ -192,7 +208,6 @@ class ServiceRuntime:
             "desired": self.desired,
             "mode": self.mode.value,
             "auto_direct": self._watcher is not None,
-            "auto_paused": self._watcher is not None and self.manually_stopped,
             "uses_ssh": self.uses_ssh,
             "active_route": self.active_route,
             "pinned_route": self.pinned_route,
@@ -241,13 +256,16 @@ class ServiceRuntime:
             except Exception as exc:  # keep probing; one bad round must not end auto-direct
                 logger.exception("[%s] auto-direct probe failed", self.service.id)
                 self.log(f"auto-direct probe failed: {exc}")
-            await asyncio.sleep(self.settings.auto_direct_interval)
+            self._probe_now.clear()
+            try:
+                await asyncio.wait_for(self._probe_now.wait(), self.settings.auto_direct_interval)
+            except asyncio.TimeoutError:
+                pass
 
     def _may_auto_start(self) -> bool:
         return (
             not self._closed
             and self.mode is Mode.OFF
-            and not self.manually_stopped
             and (self._task is None or self._task.done())
         )
 
@@ -316,6 +334,7 @@ class ServiceRuntime:
                 attempt_mode = self.mode
                 if await self._bring_up(attempt_mode):
                     backoff = INITIAL_BACKOFF
+                    self._settle_direct_in_auto()
                     await self._set_state(State.UP, attempt_finished=True)
                     if self.on_up is not None:
                         self.on_up(self)
@@ -359,6 +378,19 @@ class ServiceRuntime:
             # start() may have been called while we were shutting down.
             if self.mode is not Mode.OFF and not self._closed:
                 self._task = asyncio.create_task(self._supervise(), name=f"service:{self.service.id}")
+
+    def _settle_direct_in_auto(self) -> None:
+        """A manual connection that came up on a direct route belongs to auto.
+
+        Direct only means "listening locally", so there is nothing to keep up,
+        and staying manual would make a laptop fall back to ssh after leaving
+        home. Only ssh connections stay manual (until Stop). Services without
+        auto-direct have no auto mode and stay manual.
+        """
+        route = self.service.routes[self.active_route] if self.active_route is not None else None
+        if self.mode is Mode.MANUAL and route is not None and route.kind == "direct" and self._watcher is not None:
+            self.mode = Mode.AUTO
+            self.log("on a direct route: back to auto (no ssh fallback)")
 
     def _go_idle(self, reason: str) -> None:
         self.log(f"{reason}; idle until a direct route is reachable again")
