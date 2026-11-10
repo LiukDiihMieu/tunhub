@@ -7,6 +7,7 @@ machine is deep-merged on top of it to override or disable services locally.
 
 from __future__ import annotations
 
+import ipaddress
 import re
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -20,7 +21,10 @@ DEFAULT_HUB_PORT = 1110
 LOCAL_FILE = "local.yaml"
 
 SERVICE_TYPES = ("http", "https", "tcp")
-SERVICE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+# A service id becomes a DNS label (<id>.localhost): letters, digits and
+# inner hyphens, at most 63 characters.
+SERVICE_ID_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
+_DNS_LABEL_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 
 DEFAULT_SSH_OPTIONS = {
     "ConnectTimeout": "10",
@@ -116,7 +120,7 @@ class HubSettings:
 
     @property
     def allowed_hosts(self) -> frozenset[str]:
-        names = {self.hostname, "localhost", "127.0.0.1"}
+        names = {self.hostname, "localhost", "127.0.0.1", "[::1]"}
         return frozenset(f"{name}:{self.port}" for name in names)
 
 
@@ -162,6 +166,7 @@ def parse_config(raw: dict[str, Any]) -> Config:
         services[service_id] = _parse_service(service_id, body, auto_direct_default)
 
     _check_port_conflicts(hub, services)
+    _check_hostname_conflicts(hub, services)
     return Config(hub=hub, tunnel=tunnel, services=services)
 
 
@@ -205,9 +210,9 @@ def format_endpoint(host: str, port: int) -> str:
 
 def _parse_hub(raw: dict[str, Any]) -> HubSettings:
     return HubSettings(
-        listen_host=str(raw.get("listen", "127.0.0.1")),
-        port=_check_port(raw.get("port", DEFAULT_HUB_PORT), "hub.port"),
-        hostname=str(raw.get("hostname", "hub.localhost")).lower(),
+        listen_host=_check_listen(_text(raw, "listen", "127.0.0.1", "hub")),
+        port=_check_port(_or_default(raw, "port", DEFAULT_HUB_PORT), "hub.port"),
+        hostname=_check_hostname(_text(raw, "hostname", "hub.localhost", "hub"), "hub.hostname"),
         open_timeout=_seconds(raw, "open_timeout", 40, "hub"),
     )
 
@@ -238,15 +243,15 @@ def _parse_service(service_id: str, body: dict[str, Any], auto_direct_default: b
     if not SERVICE_ID_RE.match(service_id):
         raise ConfigError(f"{where}: id must match {SERVICE_ID_RE.pattern}")
 
-    service_type = str(body.get("type", "http")).lower()
+    service_type = _text(body, "type", "http", where).lower()
     if service_type not in SERVICE_TYPES:
         raise ConfigError(f"{where}: type must be one of {', '.join(SERVICE_TYPES)}")
 
-    if "local_port" not in body:
+    if body.get("local_port") is None:
         raise ConfigError(f"{where}: local_port is required")
     local_port = _check_port(body["local_port"], f"{where}.local_port")
 
-    path = str(body.get("path", "/"))
+    path = _text(body, "path", "/", where)
     if not path.startswith("/"):
         path = "/" + path
 
@@ -259,25 +264,31 @@ def _parse_service(service_id: str, body: dict[str, Any], auto_direct_default: b
 
     return Service(
         id=service_id,
-        name=str(body.get("name", service_id)),
+        name=_text(body, "name", service_id, where),
         type=service_type,
         local_port=local_port,
-        hostname=str(body.get("hostname", f"{service_id}.localhost")).lower(),
+        hostname=_check_hostname(_text(body, "hostname", f"{service_id}.localhost", where), f"{where}.hostname"),
         path=path,
         autostart=_flag(body, "autostart", False, where),
         health_check=_flag(body, "health_check", service_type != "tcp", where),
         routes=routes,
-        description=str(body.get("description", "")),
+        description=_text(body, "description", "", where),
         auto_direct=_flag(body, "auto_direct", auto_direct_default, where),
-        icon=str(body["icon"]) if body.get("icon") else None,
+        icon=_text(body, "icon", "", where) or None,
     )
 
 
 def _parse_route(item: Any, where: str) -> Route:
     if not isinstance(item, dict):
         raise ConfigError(f"{where}: expected a mapping with 'direct' or 'ssh'")
-    label = str(item.get("label", ""))
+    label = _text(item, "label", "", where)
 
+    if "direct" in item and "ssh" in item:
+        # Usually a missing '-': two routes written as one.
+        raise ConfigError(
+            f"{where}: has both 'direct' and 'ssh'; a route is one or the other. "
+            "Did you mean two routes (a '-' before 'ssh')?"
+        )
     if "direct" in item:
         host, port = parse_endpoint(item["direct"], where)
         return Route(kind="direct", target_host=host, target_port=port, label=label)
@@ -286,11 +297,34 @@ def _parse_route(item: Any, where: str) -> Route:
         if "remote" not in item:
             raise ConfigError(f"{where}: ssh route needs 'remote' (host:port seen from the SSH server)")
         host, port = parse_endpoint(item["remote"], where, default_host="127.0.0.1")
-        return Route(
-            kind="ssh", target_host=host, target_port=port, ssh_host=str(item["ssh"]), label=label
-        )
+        alias = _text(item, "ssh", "", where)
+        if not alias:
+            raise ConfigError(f"{where}.ssh: needs a host alias from ~/.ssh/config")
+        return Route(kind="ssh", target_host=host, target_port=port, ssh_host=alias, label=label)
 
     raise ConfigError(f"{where}: expected 'direct' or 'ssh'")
+
+
+def _check_hostname_conflicts(hub: HubSettings, services: dict[str, Service]) -> None:
+    """Each service gets its own host name: cookies and saved passwords are per host.
+
+    IP addresses and `localhost` are exempt from the duplicate check: they are
+    the workaround for apps that reject `<id>.localhost`, and whoever uses it
+    accepts that those services share cookies.
+    """
+    owners: dict[str, str] = {}
+    for service in services.values():
+        name = service.hostname
+        if name == hub.hostname:
+            raise ConfigError(f"service '{service.id}': host name {name} is the dashboard's own host name")
+        if name == "localhost" or _is_ip(name):
+            continue
+        if name in owners:
+            raise ConfigError(
+                f"service '{service.id}': host name {name} is already used by service '{owners[name]}' "
+                "(they would share cookies and saved passwords)"
+            )
+        owners[name] = service.id
 
 
 def _check_port_conflicts(hub: HubSettings, services: dict[str, Service]) -> None:
@@ -326,9 +360,58 @@ def _mapping(value: Any, where: str) -> dict[str, Any]:
     return value
 
 
+def _or_default(raw: dict[str, Any], key: str, default: Any) -> Any:
+    """The value of an optional key; null (or a missing key) means the default."""
+    value = raw.get(key)
+    return default if value is None else value
+
+
+def _text(raw: dict[str, Any], key: str, default: str, where: str) -> str:
+    """Text; null means the default. Numbers are read as text, true/false are not."""
+    value = _or_default(raw, key, default)
+    if isinstance(value, bool) or not isinstance(value, (str, int, float)):
+        raise ConfigError(f"{where}.{key}: expected text, got {value!r}")
+    return str(value)
+
+
+def _is_ip(name: str) -> bool:
+    try:
+        ipaddress.ip_address(name)
+    except ValueError:
+        return False
+    return True
+
+
+def _check_hostname(name: str, where: str) -> str:
+    """A host name for URLs: an IPv4 address or a valid DNS name (lowercased)."""
+    name = name.lower()
+    if _is_ip(name):
+        if ipaddress.ip_address(name).version == 6:
+            raise ConfigError(f"{where}: an IPv6 address cannot be used as a host name here")
+        return name
+    labels = name.split(".")
+    if len(name) > 253 or not all(_DNS_LABEL_RE.match(label) for label in labels):
+        raise ConfigError(f"{where}: {name!r} is not a valid host name")
+    return name
+
+
+def _check_listen(host: str) -> str:
+    """The dashboard has no login, so it may only listen on this machine."""
+    try:
+        loopback = ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        loopback = False
+    if not loopback:
+        raise ConfigError(
+            f"hub.listen: {host!r} is not a loopback address (e.g. 127.0.0.1); the dashboard has no "
+            "login, so it must not be reachable from other machines"
+        )
+    return host
+
+
 def _seconds(raw: dict[str, Any], key: str, default: float, where: str) -> float:
-    """A positive duration in seconds."""
-    value = raw.get(key, default)
+    """A positive duration in seconds; null means the default."""
+    value = _or_default(raw, key, default)
     if isinstance(value, bool):  # bool is an int subclass; reject `true`
         value = None
     try:
@@ -341,8 +424,8 @@ def _seconds(raw: dict[str, Any], key: str, default: float, where: str) -> float
 
 
 def _flag(raw: dict[str, Any], key: str, default: bool, where: str) -> bool:
-    """A true/false value; strings such as "false" are rejected, not read as true."""
-    value = raw.get(key, default)
+    """A true/false value (null means the default); "false" as text is rejected, not read as true."""
+    value = _or_default(raw, key, default)
     if not isinstance(value, bool):
         raise ConfigError(f"{where}.{key}: expected true or false, got {value!r}")
     return value

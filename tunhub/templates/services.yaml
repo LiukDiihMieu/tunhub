@@ -32,7 +32,7 @@
 hub:
   port: 1110
   hostname: hub.localhost   # dashboard: http://hub.localhost:1110
-  # listen: 127.0.0.1
+  # listen: 127.0.0.1      # loopback only (127.0.0.1, ::1): the dashboard has no login
   # open_timeout: 40        # seconds /open/<id> waits before showing an error
 
 tunnel:

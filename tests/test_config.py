@@ -12,7 +12,7 @@ def test_defaults_for_web_service():
     assert dsm.hostname == "dsm.localhost"
     assert dsm.url == "http://dsm.localhost:15000/"
     assert dsm.health_check is True
-    assert config.hub.allowed_hosts == {"hub.localhost:1110", "localhost:1110", "127.0.0.1:1110"}
+    assert config.hub.allowed_hosts == {"hub.localhost:1110", "localhost:1110", "127.0.0.1:1110", "[::1]:1110"}
 
 
 def test_tcp_service_uses_loopback_address_and_no_health_check():
@@ -255,3 +255,133 @@ def test_missing_services_yaml_is_an_empty_config(tmp_path):
     assert config.hub.port == 1110  # defaults still apply
     (tmp_path / "services.yaml").write_text("services: {}\n")
     assert load_config(tmp_path).found is True
+
+
+# ---------------------------------------------------------------------------
+# Validation rules fixed for 0.2 (see COMPATIBILITY.md)
+
+
+def _service(**fields):
+    return {**BASE_SERVICE, **fields}
+
+
+def test_null_means_default():
+    raw = {
+        "hub": {"port": None, "hostname": None, "listen": None, "open_timeout": None},
+        "tunnel": {"auto_direct": None},
+        "services": {
+            "dsm": _service(name=None, description=None, path=None, icon=None, hostname=None, type=None,
+                            autostart=None, health_check=None),
+        },
+    }
+    config = parse_config(raw)
+    dsm = config.services["dsm"]
+    assert config.hub.port == 1110 and config.hub.hostname == "hub.localhost"
+    assert config.hub.listen_host == "127.0.0.1"
+    assert (dsm.name, dsm.description, dsm.icon, dsm.hostname) == ("dsm", "", None, "dsm.localhost")
+    assert dsm.url == "http://dsm.localhost:15000/"
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"name": True},
+        {"hostname": ["a"]},
+        {"description": {"x": 1}},
+        {"routes": [{"ssh": True, "remote": 5000}]},
+        {"routes": [{"ssh": None, "remote": 5000}]},
+        {"routes": [{"direct": "192.168.1.10:5000", "label": False}]},
+    ],
+)
+def test_non_text_value_for_text_field_is_rejected(fields):
+    with pytest.raises(ConfigError):
+        parse_config({"services": {"dsm": _service(**fields)}})
+
+
+def test_numbers_are_read_as_text():
+    config = parse_config({"services": {"dsm": _service(name=2048)}})
+    assert config.services["dsm"].name == "2048"
+
+
+@pytest.mark.parametrize("listen", ["127.0.0.1", "127.0.0.2", "::1"])
+def test_listen_on_loopback_is_accepted(listen):
+    assert parse_config({"hub": {"listen": listen}}).hub.listen_host == listen
+
+
+@pytest.mark.parametrize("listen", ["0.0.0.0", "::", "192.168.1.5", "localhost", "example.com"])
+def test_listen_off_this_machine_is_rejected(listen):
+    with pytest.raises(ConfigError, match="loopback"):
+        parse_config({"hub": {"listen": listen}})
+
+
+@pytest.mark.parametrize("service_id", ["a", "a1", "my-app", "x" * 63])
+def test_valid_service_ids(service_id):
+    assert service_id in parse_config({"services": {service_id: BASE_SERVICE}}).services
+
+
+@pytest.mark.parametrize("service_id", ["-a", "a-", "x" * 64, "a_b", "A", "a.b"])
+def test_invalid_service_ids(service_id):
+    with pytest.raises(ConfigError):
+        parse_config({"services": {service_id: BASE_SERVICE}})
+
+
+@pytest.mark.parametrize("hostname", ["nas.lan", "NAS.Home.Arpa", "127.0.0.1", "localhost", "a-b.example"])
+def test_valid_hostnames(hostname):
+    config = parse_config({"services": {"dsm": _service(hostname=hostname)}})
+    assert config.services["dsm"].hostname == hostname.lower()
+
+
+@pytest.mark.parametrize("hostname", ["nas_box", "-nas.lan", "nas..lan", "nas.lan.", "::1", "a b", ""])
+def test_invalid_hostnames(hostname):
+    with pytest.raises(ConfigError):
+        parse_config({"services": {"dsm": _service(hostname=hostname)}})
+
+
+def test_invalid_hub_hostname_is_rejected():
+    with pytest.raises(ConfigError, match="hub.hostname"):
+        parse_config({"hub": {"hostname": "my_hub"}})
+
+
+def test_service_hostname_equal_to_hub_hostname_is_rejected():
+    raw = {"hub": {"hostname": "tunhub.lan"}, "services": {"dsm": _service(hostname="TunHub.lan")}}
+    with pytest.raises(ConfigError, match="dashboard"):
+        parse_config(raw)
+
+
+def test_service_id_hub_collides_with_default_hub_hostname():
+    with pytest.raises(ConfigError, match="dashboard"):
+        parse_config({"services": {"hub": BASE_SERVICE}})
+
+
+def test_duplicate_service_hostnames_are_rejected():
+    raw = {
+        "services": {
+            "a": _service(hostname="nas.lan"),
+            "b": {**_service(hostname="nas.lan"), "local_port": 15001},
+        }
+    }
+    with pytest.raises(ConfigError, match="already used by service 'a'"):
+        parse_config(raw)
+
+
+@pytest.mark.parametrize("hostname", ["127.0.0.1", "localhost"])
+def test_ip_and_localhost_may_be_shared(hostname):
+    raw = {
+        "services": {
+            "a": _service(hostname=hostname),
+            "b": {**_service(hostname=hostname), "local_port": 15001},
+        }
+    }
+    assert set(parse_config(raw).services) == {"a", "b"}
+
+
+def test_route_with_both_direct_and_ssh_is_rejected():
+    route = {"direct": "192.168.1.10:5000", "ssh": "nas", "remote": 5000}
+    with pytest.raises(ConfigError, match="'-' before 'ssh'"):
+        parse_config({"services": {"dsm": _service(routes=[route])}})
+
+
+def test_several_ssh_routes_are_fine():
+    routes = [{"ssh": "nas", "remote": 5000}, {"ssh": "nas-cloudflare", "remote": 5000}]
+    config = parse_config({"services": {"dsm": _service(routes=routes)}})
+    assert [r.ssh_host for r in config.services["dsm"].routes] == ["nas", "nas-cloudflare"]
