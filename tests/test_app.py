@@ -292,3 +292,11 @@ def test_state_lists_config_warnings(setup):
     warnings = client.get("/api/state").json()["config"]["warnings"]
     # The fixture's direct route to 127.0.0.1 sits in services.yaml.
     assert len(warnings) == 1 and "connects directly to 127.0.0.1" in warnings[0]
+
+
+def test_state_names_the_machine_and_its_local_file(setup):
+    client, hub, *_ = setup
+    config = client.get("/api/state").json()
+    assert config["machine"] == "testbox"
+    assert config["config"]["local_path"] == str(hub.config_dir / "local.testbox.yaml")
+    assert config["config"]["local_found"] is False

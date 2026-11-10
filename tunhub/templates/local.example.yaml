@@ -1,19 +1,34 @@
-# Copy to local.yaml to override services.yaml on THIS machine only.
-# Mappings are merged key by key; lists (such as `routes`) are replaced entirely.
+# Overrides for ONE machine. Copy this file to local.<machine>.yaml, where
+# <machine> is the name the dashboard shows next to its title (this machine's
+# host name, lowercased, up to the first dot; set TUNHUB_MACHINE to choose
+# another). Each machine reads only its own file, so the whole config
+# directory can be synced between machines.
+#
+# The file is merged on top of services.yaml: mappings key by key, while lists
+# (such as `routes`) replace the shared ones entirely.
+#
+# Keep services.yaml the same for every machine. Put here only what really
+# differs on this machine; pick the parts you need.
 
 services:
-  # This machine IS the workstation: reach its services locally, and hide its
-  # own remote desktop.
+  # This machine IS the workstation from services.yaml: reach Jupyter on
+  # this machine directly (127.0.0.1 is this machine, so it belongs here,
+  # never in the shared file) ...
   jupyter:
     routes:
       - direct: 127.0.0.1:8888
+  # ... and do not offer a remote desktop to itself.
   desktop:
     enabled: false
 
-  # Keep the NAS connected from startup.
-  nas:
-    autostart: true
-
-  # Change only the local port (e.g. 15000 is taken on this machine).
+  # The shared local port is already taken on this machine.
   # nas:
   #   local_port: 25000
+
+  # Connect when tunhub starts, on this machine only.
+  # nas:
+  #   autostart: true
+
+# This machine's ssh program differs (e.g. Windows OpenSSH by full path).
+# tunnel:
+#   ssh_command: [C:/Windows/System32/OpenSSH/ssh.exe]

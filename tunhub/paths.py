@@ -12,13 +12,42 @@ keep in a dotfiles repo.
 
 from __future__ import annotations
 
+import functools
 import os
+import socket
+import subprocess
 import sys
 from pathlib import Path
 
 APP_NAME = "tunhub"
 CONFIG_DIR_ENV = "TUNHUB_CONFIG_DIR"
 CACHE_DIR_ENV = "TUNHUB_CACHE_DIR"
+MACHINE_ENV = "TUNHUB_MACHINE"
+
+
+def machine_name() -> str:
+    """This machine's name, which picks its override file `local.<name>.yaml`.
+
+    $TUNHUB_MACHINE if set, else the OS host name (on macOS the LocalHostName,
+    which does not change with the network). Lowercased, and only the part
+    before the first dot: `Laptop.lan` -> `laptop`.
+    """
+    name = os.environ.get(MACHINE_ENV) or _os_machine_name()
+    return name.strip().lower().split(".")[0]
+
+
+@functools.cache
+def _os_machine_name() -> str:
+    if sys.platform == "darwin":
+        try:
+            result = subprocess.run(
+                ["scutil", "--get", "LocalHostName"], capture_output=True, text=True, timeout=5, check=True
+            )
+            if result.stdout.strip():
+                return result.stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            pass
+    return socket.gethostname()
 
 
 def _env_path(name: str, fallback: Path) -> Path:

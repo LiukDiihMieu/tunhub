@@ -1,8 +1,9 @@
 """Configuration loading.
 
-The shared ``services.yaml`` (synced via git) defines every service and the
-ordered list of routes to try. An optional, untracked ``local.yaml`` on each
-machine is deep-merged on top of it to override or disable services locally.
+The shared ``services.yaml`` defines every service and the ordered list of
+routes to try. An optional ``local.<machine>.yaml`` (named after each machine,
+so the whole directory can be synced) is deep-merged on top of it to override
+or disable services on that machine only.
 """
 
 from __future__ import annotations
@@ -18,11 +19,18 @@ import yaml
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 
 from . import __version__
+from .paths import MACHINE_ENV, machine_name
 
 SHARED_FILE = "services.yaml"
 # The dashboard's port when hub.port is not set (tunhub's release date, 11-10).
 DEFAULT_HUB_PORT = 1110
-LOCAL_FILE = "local.yaml"
+# The per-machine override file, as shown in messages.
+LOCAL_FILE = "local.<machine>.yaml"
+
+
+def local_file_name(machine: str) -> str:
+    return f"local.{machine}.yaml"
+
 
 SERVICE_TYPES = ("http", "https", "tcp")
 # A service id becomes a DNS label (<id>.localhost): letters, digits and
@@ -168,26 +176,50 @@ class Config:
     found: bool = True
     # Problems that do not stop tunhub (e.g. an unknown key); shown on the dashboard.
     warnings: tuple[str, ...] = ()
+    # This machine's name and the override file it reads (which may not exist).
+    machine: str = ""
+    local_path: Path | None = None
+    local_found: bool = False
 
 
 # ---------------------------------------------------------------------------
 # Public API
 
 
-def load_config(config_dir: Path) -> Config:
-    """Read services.yaml (+ local.yaml). A missing services.yaml is an empty config."""
+def load_config(config_dir: Path, machine: str | None = None) -> Config:
+    """Read services.yaml (+ local.<machine>.yaml). A missing services.yaml is an empty config."""
     shared_path = config_dir / SHARED_FILE
     found = shared_path.exists()
     raw = _read_yaml(shared_path) if found else {}
-
     shared_warnings = _shared_file_warnings(raw)
 
-    local_path = config_dir / LOCAL_FILE
-    if local_path.exists():
-        raw = deep_merge(raw, _read_yaml(local_path))
+    machine = machine_name() if machine is None else machine
+    local_path: Path | None = None
+    local_found = False
+    if _usable_machine_name(machine):
+        local_path = config_dir / local_file_name(machine)
+        local_found = local_path.exists()
+        if local_found:
+            raw = deep_merge(raw, _read_yaml(local_path))
+    else:
+        shared_warnings.append(
+            f"machine name {machine!r} cannot be used in a file name, so no {LOCAL_FILE} is read; "
+            f"set {MACHINE_ENV} to a simple name"
+        )
 
     config = parse_config(raw)
-    return replace(config, found=found, warnings=config.warnings + tuple(shared_warnings))
+    return replace(
+        config,
+        found=found,
+        warnings=config.warnings + tuple(shared_warnings),
+        machine=machine,
+        local_path=local_path,
+        local_found=local_found,
+    )
+
+
+def _usable_machine_name(machine: str) -> bool:
+    return bool(machine) and machine.isprintable() and not any(char in machine for char in '/\\:*?"<>|')
 
 
 def parse_config(raw: dict[str, Any]) -> Config:
@@ -421,7 +453,7 @@ def _shared_file_warnings(shared: dict[str, Any]) -> list[str]:
                 warnings.append(
                     f"{SHARED_FILE}: service '{service_id}'.routes[{index}] connects directly to "
                     f"{format_endpoint(host, port)}, which is a different machine on every computer; "
-                    f"put this route in {LOCAL_FILE} on the machine that runs the service"
+                    f"put this route in {LOCAL_FILE} of the machine that runs the service"
                 )
     return warnings
 

@@ -342,7 +342,9 @@ $("d-refresh-icon").addEventListener("click", async () => {
 
 /** Where the config lives; a setup guide while no service is configured. */
 function renderSetup(config, empty) {
-  $("reload").title = `Re-read ${config.path} (and local.yaml next to it)`;
+  $("reload").title = config.local_found
+    ? `Re-read ${config.path}\nand ${config.local_path}`
+    : `Re-read ${config.path}\n(no ${config.local_path || "local file"} for this machine)`;
   $("setup").hidden = !empty;
   if (!empty) return;
   $("setup-lead").textContent = config.found
@@ -447,7 +449,8 @@ async function poll() {
   hubUrl = data.hub;
   renderSetup(data.config, data.services.length === 0);
   renderWarnings(data.config.warnings);
-  $("client").textContent = `on ${data.client}`;
+  $("machine").textContent = `on ${data.machine}`;
+  $("machine").title = `This machine's overrides: local.${data.machine}.yaml`;
   $("version").textContent = `tunhub ${data.version}`; // the running server's version
 
   const seen = new Set();

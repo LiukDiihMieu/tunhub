@@ -145,7 +145,7 @@ class MacGuard:
 
     async def check(self, ip: str) -> Verdict:
         if self.skip_loopback and ipaddress.ip_address(ip).is_loopback:
-            return Verdict(True)  # e.g. local.yaml on the server itself
+            return Verdict(True)  # e.g. local.<machine>.yaml on the server itself
         mac = await asyncio.to_thread(self.lookup, ip)
         try:
             entries = self.known.lookup(ip)

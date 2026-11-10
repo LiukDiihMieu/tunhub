@@ -29,7 +29,7 @@ def test_init_creates_valid_example_and_refuses_overwrite(tmp_path, capsys):
 
 def test_local_example_merges_cleanly(tmp_path):
     main(["init", "--config-dir", str(tmp_path)])
-    (tmp_path / "local.yaml").write_text((tmp_path / "local.example.yaml").read_text())
+    (tmp_path / "local.testbox.yaml").write_text((tmp_path / "local.example.yaml").read_text())
     config = load_config(tmp_path)
     assert "desktop" not in config.services
     assert config.services["jupyter"].routes[0].kind == "direct"

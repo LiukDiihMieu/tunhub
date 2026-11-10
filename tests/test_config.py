@@ -25,7 +25,7 @@ def test_tcp_service_uses_loopback_address_and_no_health_check():
     assert (route.kind, route.ssh_host, route.target_host, route.target_port) == ("ssh", "lab", "127.0.0.1", 3390)
 
 
-def test_local_yaml_overrides_and_disables(tmp_path):
+def test_local_file_overrides_and_disables(tmp_path):
     (tmp_path / "services.yaml").write_text(
         """
 services:
@@ -38,7 +38,7 @@ services:
     routes: [{direct: "127.0.0.1:8888"}]
 """
     )
-    (tmp_path / "local.yaml").write_text(
+    (tmp_path / "local.testbox.yaml").write_text(
         """
 services:
   dsm:
@@ -233,16 +233,16 @@ def test_null_service_body_still_means_empty_mapping():
 
 
 @pytest.mark.parametrize("content", ["false", "0", "[]", '""', "- a"])
-@pytest.mark.parametrize("file_name", ["services.yaml", "local.yaml"])
+@pytest.mark.parametrize("file_name", ["services.yaml", "local.testbox.yaml"])
 def test_config_file_top_level_must_be_a_mapping(tmp_path, file_name, content):
-    # Used to be read as an empty config, so a broken local.yaml was ignored.
+    # Used to be read as an empty config, so a broken local file was ignored.
     (tmp_path / "services.yaml").write_text("services: {}\n")
     (tmp_path / file_name).write_text(content + "\n")
     with pytest.raises(ConfigError, match="top level: expected a mapping"):
         load_config(tmp_path)
 
 
-@pytest.mark.parametrize("file_name", ["services.yaml", "local.yaml"])
+@pytest.mark.parametrize("file_name", ["services.yaml", "local.testbox.yaml"])
 def test_empty_config_file_is_an_empty_mapping(tmp_path, file_name):
     (tmp_path / "services.yaml").write_text("services: {}\n")
     (tmp_path / file_name).write_text("# only a comment\n")
@@ -441,7 +441,7 @@ def test_loopback_direct_route_in_shared_file_is_a_warning(tmp_path):
 
 def test_loopback_direct_route_in_local_file_is_fine(tmp_path):
     (tmp_path / "services.yaml").write_text("services:\n  a: {local_port: 15000, routes: [{ssh: nas, remote: 5000}]}\n")
-    (tmp_path / "local.yaml").write_text("services:\n  a: {routes: [{direct: '127.0.0.1:5000'}]}\n")
+    (tmp_path / "local.testbox.yaml").write_text("services:\n  a: {routes: [{direct: '127.0.0.1:5000'}]}\n")
     assert load_config(tmp_path).warnings == ()
 
 
@@ -477,3 +477,41 @@ def test_invalid_required_version(spec):
 
 def test_required_version_is_not_an_unknown_key():
     assert parse_config({"requires_tunhub": ">=0.1"}).warnings == ()
+
+
+# ---------------------------------------------------------------------------
+# local.<machine>.yaml
+
+
+def test_each_machine_reads_only_its_own_local_file(tmp_path):
+    (tmp_path / "services.yaml").write_text("services:\n  a: {local_port: 15000, routes: [{ssh: nas, remote: 1}]}\n")
+    (tmp_path / "local.laptop.yaml").write_text("services:\n  a: {local_port: 25000}\n")
+    (tmp_path / "local.desktop.yaml").write_text("services:\n  a: {local_port: 35000}\n")
+
+    laptop = load_config(tmp_path, machine="laptop")
+    assert laptop.services["a"].local_port == 25000
+    assert (laptop.machine, laptop.local_path, laptop.local_found) == ("laptop", tmp_path / "local.laptop.yaml", True)
+    assert load_config(tmp_path, machine="desktop").services["a"].local_port == 35000
+
+    other = load_config(tmp_path, machine="server")
+    assert other.services["a"].local_port == 15000
+    assert (other.local_path, other.local_found) == (tmp_path / "local.server.yaml", False)
+
+
+def test_plain_local_yaml_is_not_read(tmp_path):
+    (tmp_path / "services.yaml").write_text("services:\n  a: {local_port: 15000, routes: [{ssh: nas, remote: 1}]}\n")
+    (tmp_path / "local.yaml").write_text("services:\n  a: {local_port: 25000}\n")
+    assert load_config(tmp_path, machine="laptop").services["a"].local_port == 15000
+
+
+def test_machine_name_from_environment_is_the_default(tmp_path):
+    (tmp_path / "local.testbox.yaml").write_text("hub: {port: 1111}\n")
+    config = load_config(tmp_path)  # conftest sets TUNHUB_MACHINE=testbox
+    assert config.machine == "testbox" and config.hub.port == 1111
+
+
+@pytest.mark.parametrize("machine", ["", "a/b", "a\\b", "c:", "x\ny"])
+def test_unusable_machine_name_reads_no_local_file_and_warns(tmp_path, machine):
+    config = load_config(tmp_path, machine=machine)
+    assert config.local_path is None and not config.local_found
+    assert any("cannot be used in a file name" in w for w in config.warnings)

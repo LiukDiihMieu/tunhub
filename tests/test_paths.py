@@ -41,3 +41,60 @@ def test_env_overrides_win_over_defaults(clean_env, monkeypatch):
     monkeypatch.setenv("TUNHUB_CACHE_DIR", "/custom/cache")
     assert paths.default_config_dir() == Path("/custom/config")
     assert paths.icon_cache_dir() == Path("/custom/cache/icons")
+
+
+# ---------------------------------------------------------------------------
+# Machine name: picks local.<machine>.yaml
+
+
+@pytest.fixture
+def os_name(monkeypatch):
+    """Let the OS report a given host name (no TUNHUB_MACHINE)."""
+    from tunhub import paths
+
+    monkeypatch.delenv("TUNHUB_MACHINE", raising=False)
+    paths._os_machine_name.cache_clear()
+    yield lambda name: monkeypatch.setattr(paths.socket, "gethostname", lambda: name)
+    paths._os_machine_name.cache_clear()
+
+
+@pytest.mark.parametrize(
+    ("host", "machine"),
+    [("Laptop", "laptop"), ("DESKTOP-AB12CD", "desktop-ab12cd"), ("nas.lan", "nas"), ("ws.lab.example.org", "ws")],
+)
+def test_machine_name_from_host_name(os_name, monkeypatch, host, machine):
+    monkeypatch.setattr("sys.platform", "linux")
+    os_name(host)
+    assert paths.machine_name() == machine
+
+
+def test_machine_name_on_macos_uses_local_host_name(os_name, monkeypatch):
+    import subprocess
+
+    monkeypatch.setattr("sys.platform", "darwin")
+    os_name("ignored.local")
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="Example-MacBook\n")
+
+    monkeypatch.setattr(paths.subprocess, "run", fake_run)
+    assert paths.machine_name() == "example-macbook"
+    assert calls == [["scutil", "--get", "LocalHostName"]]
+
+
+def test_machine_name_on_macos_falls_back_to_host_name(os_name, monkeypatch):
+    monkeypatch.setattr("sys.platform", "darwin")
+    os_name("Mac.local")
+
+    def broken_run(command, **kwargs):
+        raise OSError("no scutil")
+
+    monkeypatch.setattr(paths.subprocess, "run", broken_run)
+    assert paths.machine_name() == "mac"
+
+
+def test_machine_name_from_environment(monkeypatch):
+    monkeypatch.setenv("TUNHUB_MACHINE", " Work-Laptop ")
+    assert paths.machine_name() == "work-laptop"
