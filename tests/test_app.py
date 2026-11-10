@@ -233,3 +233,10 @@ def test_reload_keeps_the_old_config_when_the_file_disappears(setup):
     assert response.status_code == 400
     assert "not found" in response.json()["error"]
     assert hub.get("web") is running and running.desired
+
+
+def test_state_reports_the_running_version(setup):
+    from tunhub import __version__
+
+    client, *_ = setup
+    assert client.get("/api/state").json()["version"] == __version__
