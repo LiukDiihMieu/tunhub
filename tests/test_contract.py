@@ -6,6 +6,8 @@ in docs/COMPATIBILITY.md (keep the old form working and warn), or reconsider.
 """
 
 import json
+import socket
+import subprocess
 import sys
 from pathlib import Path
 
@@ -161,10 +163,10 @@ def test_login_entry_names_and_command(tmp_path):
     assert autostart.SYSTEMD_UNIT == "tunhub.service"
     assert autostart.LAUNCHD_LABEL == "io.github.liukdiihmieu.tunhub"
     assert autostart.WINDOWS_TASK == "TunHub"
-    assert autostart.run_command(tmp_path) == [sys.executable, "-m", "tunhub", "run", "--config-dir", str(tmp_path.resolve())]
+    assert autostart.run_command(tmp_path) == [sys.executable, "-m", "tunhub", "run", "--config-dir", str(tmp_path)]
     # That command line keeps working.
     args = build_parser().parse_args(autostart.run_command(tmp_path)[3:])
-    assert args.config_dir == tmp_path.resolve()
+    assert args.config_dir == tmp_path
 
 
 # ---------------------------------------------------------------------------
@@ -175,3 +177,154 @@ def test_commands_exist():
     parser = build_parser()
     for argv in (["run"], ["init"], ["service", "install"], ["service", "uninstall"], ["service", "status"], ["forget", "192.0.2.1"]):
         assert parser.parse_args(argv).handler is not None, argv
+
+
+# ---------------------------------------------------------------------------
+# More of the configuration contract
+
+
+def test_documented_keys_stay_known():
+    """Removing or renaming a key breaks configs; adding keys is fine."""
+    from tunhub import config
+
+    assert set(config.TOP_KEYS) >= {"requires_tunhub", "hub", "tunnel", "services"}
+    assert set(config.HUB_KEYS) >= {"listen", "port", "hostname", "open_timeout"}
+    assert set(config.TUNNEL_KEYS) >= {
+        "ssh_command", "ssh_options", "probe_timeout", "ready_timeout", "health_timeout",
+        "auto_direct_interval", "auto_direct",
+    }
+    assert set(config.SERVICE_KEYS) >= {
+        "name", "description", "type", "local_port", "hostname", "path", "icon", "routes",
+        "autostart", "health_check", "auto_direct", "enabled",
+    }
+    assert set(config.DIRECT_ROUTE_KEYS) >= {"direct", "label"}
+    assert set(config.SSH_ROUTE_KEYS) >= {"ssh", "remote", "label"}
+    assert set(config.SERVICE_TYPES) >= {"http", "https", "tcp"}
+
+
+def test_unknown_keys_warn_at_every_level():
+    raw = {
+        "top_new": 1,
+        "hub": {"hub_new": 1},
+        "tunnel": {"tunnel_new": 1},
+        "services": {
+            "a": {
+                "local_port": 15000,
+                "service_new": 1,
+                "routes": [{"direct": "192.0.2.10:1", "route_new": 1}, {"ssh": "x", "remote": 1, "route_new": 1}],
+            }
+        },
+    }
+    assert len(parse_config(raw).warnings) == 6
+
+
+def test_endpoint_formats():
+    from tunhub.config import parse_endpoint
+
+    assert parse_endpoint("192.0.2.10:5000", "t") == ("192.0.2.10", 5000)
+    assert parse_endpoint("nas.lan:5000", "t") == ("nas.lan", 5000)
+    assert parse_endpoint("[2001:db8::1]:5000", "t") == ("2001:db8::1", 5000)
+    assert parse_endpoint(5000, "t", default_host="127.0.0.1") == ("127.0.0.1", 5000)  # bare port for `remote`
+
+
+def test_required_version_not_met_is_an_error():
+    from tunhub.config import ConfigError
+
+    with pytest.raises(ConfigError, match="please upgrade"):
+        parse_config({"requires_tunhub": ">=999"})
+
+
+@pytest.mark.parametrize(("listen", "ok"), [("127.0.0.1", True), ("::1", True), ("0.0.0.0", False), ("192.0.2.1", False)])
+def test_listen_is_loopback_only(listen, ok):
+    from tunhub.config import ConfigError
+
+    if ok:
+        assert parse_config({"hub": {"listen": listen}}).hub.listen_host == listen
+    else:
+        with pytest.raises(ConfigError):
+            parse_config({"hub": {"listen": listen}})
+
+
+@pytest.mark.parametrize(
+    ("service_id", "ok"), [("nas", True), ("my-nas-2", True), ("x" * 63, True), ("x" * 64, False), ("-nas", False), ("Nas", False)]
+)
+def test_service_id_rule(service_id, ok):
+    from tunhub.config import ConfigError
+
+    raw = {"services": {service_id: {"local_port": 15000, "routes": [{"ssh": "x", "remote": 1}]}}}
+    if ok:
+        assert service_id in parse_config(raw).services
+    else:
+        with pytest.raises(ConfigError):
+            parse_config(raw)
+
+
+# ---------------------------------------------------------------------------
+# /open redirects
+
+
+@pytest.fixture
+def reachable(tmp_path):
+    """Two services whose direct route reaches a listening socket."""
+    target = socket.create_server(("127.0.0.1", 0))
+    port = target.getsockname()[1]
+    hub_port, web_port, tcp_port = free_port(), free_port(), free_port()
+    (tmp_path / "services.yaml").write_text(
+        f"hub: {{port: {hub_port}}}\n"
+        "services:\n"
+        f"  nas: {{local_port: {web_port}, health_check: false, routes: [{{direct: '127.0.0.1:{port}'}}]}}\n"
+        f"  rdp: {{local_port: {tcp_port}, type: tcp, routes: [{{direct: '127.0.0.1:{port}'}}]}}\n"
+    )
+    client = TestClient(create_app(Hub(tmp_path)), base_url=f"http://hub.localhost:{hub_port}")
+    with client:
+        yield client, web_port
+    target.close()
+
+
+def test_open_redirects_web_service_to_its_address(reachable):
+    client, web_port = reachable
+    response = client.get("/open/nas", follow_redirects=False)
+    assert response.status_code == 302
+    assert response.headers["location"] == f"http://nas.localhost:{web_port}/"
+
+
+def test_open_redirects_tcp_service_to_the_dashboard(reachable):
+    client, _ = reachable
+    response = client.get("/open/rdp", follow_redirects=False)
+    assert response.status_code == 302
+    assert response.headers["location"] == "/#rdp"
+
+
+# ---------------------------------------------------------------------------
+# More of the command line contract
+
+
+def test_no_command_means_run():
+    from tunhub.cli import cmd_run
+
+    assert build_parser().parse_args([]).handler is cmd_run
+
+
+def test_python_dash_m():
+    result = subprocess.run([sys.executable, "-m", "tunhub", "--version"], capture_output=True, text=True, timeout=60)
+    assert result.returncode == 0 and result.stdout.startswith("tunhub ")
+
+
+def test_exit_codes(tmp_path, monkeypatch, capsys):
+    from tunhub.cli import main
+
+    assert main(["init", "--config-dir", str(tmp_path)]) == 0
+    assert main(["init", "--config-dir", str(tmp_path)]) == 1  # could not be done: file exists
+    assert main(["forget", "not-an-ip", "--config-dir", str(tmp_path)]) == 2
+    with pytest.raises(SystemExit) as exc:
+        main(["no-such-command"])
+    assert exc.value.code == 2
+
+    (tmp_path / "services.yaml").write_text("requires_tunhub: '>=999'\n")
+    assert main(["run", "--config-dir", str(tmp_path)]) == 2  # configuration error
+
+    monkeypatch.setattr(autostart, "status", lambda: "")
+    monkeypatch.setattr(autostart, "installed", lambda: True)
+    assert main(["service", "status"]) == 0
+    monkeypatch.setattr(autostart, "installed", lambda: False)
+    assert main(["service", "status"]) == 1
