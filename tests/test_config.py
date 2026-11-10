@@ -427,7 +427,6 @@ def test_loopback_direct_route_in_shared_file_is_a_warning(tmp_path):
         "services:\n"
         "  a: {local_port: 15000, routes: [{direct: '127.0.0.1:5000'}, {ssh: nas, remote: 5000}]}\n"
         "  b: {local_port: 15001, routes: [{direct: 'localhost:5001'}]}\n"
-        "  c: {local_port: 15002, routes: [{direct: '[::1]:5002'}]}\n"
         "  d: {local_port: 15003, routes: [{direct: '192.168.1.10:5003'}]}\n"
         "  e: {local_port: 15004, enabled: false, routes: [{direct: '127.0.0.1:5004'}]}\n"
     )
@@ -435,7 +434,6 @@ def test_loopback_direct_route_in_shared_file_is_a_warning(tmp_path):
     assert [w.split(".routes")[0] for w in warnings] == [
         "services.yaml: service 'a'",
         "services.yaml: service 'b'",
-        "services.yaml: service 'c'",
     ]
 
 
@@ -561,3 +559,18 @@ def test_ip_host_name_of_another_machine_is_a_warning():
     assert len(warnings) == 2
     assert warnings[0].startswith("hub.hostname: 192.168.1.4 is another machine")
     assert warnings[1].startswith("service 'lan'.hostname: 192.168.1.5 is another machine")
+
+
+# ---------------------------------------------------------------------------
+# IPv6: ssh routes only
+
+
+@pytest.mark.parametrize("target", ["[::1]:5000", "[2001:db8::1]:5000", "[fe80::1%eth0]:5000"])
+def test_direct_route_to_ipv6_is_rejected(target):
+    with pytest.raises(ConfigError, match="IPv4 addresses and host names only"):
+        parse_config({"services": {"dsm": _service(routes=[{"direct": target}])}})
+
+
+def test_ssh_route_to_ipv6_is_fine():
+    route = {"ssh": "nas", "remote": "[2001:db8::1]:5000"}
+    assert parse_config({"services": {"dsm": _service(routes=[route])}}).services["dsm"].routes[0].target_host == "2001:db8::1"
