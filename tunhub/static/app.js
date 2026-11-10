@@ -368,29 +368,28 @@ $("setup-reload").addEventListener("click", () => $("reload").click());
 
 // --------------------------------------------------------------- favicon
 
-// The tab icon gets a dot while a service is connecting (amber) or failing
-// (red), so a pinned tab shows trouble without being opened.
-const FAVICON_DOTS = { connecting: "#d97706", failing: "#dc2626" };
+// The tab icon gets a red dot only when something needs attention: a service
+// that is on keeps failing, or tunhub itself is not reachable. A pinned tab
+// then shows trouble without being opened.
+const FAVICON_DOT = "#dc2626";
 let faviconSvg = null;
-let faviconStatus = null;
+let faviconAlert = false;
 fetch("/static/icons/favicon.svg")
   .then((response) => response.text())
   .then((svg) => { faviconSvg = svg; })
   .catch(() => {});
 
 function updateFavicon(services) {
-  let status = null;
-  if (services.some((s) => s.state === "retrying")) status = "failing";
-  else if (services.some((s) => s.state === "connecting")) status = "connecting";
-  setFaviconStatus(status);
+  setFaviconAlert(services.some((s) => s.state === "retrying"));
 }
 
-function setFaviconStatus(status) {
-  if (!faviconSvg || status === faviconStatus) return;
-  faviconStatus = status;
-  const dot = status
-    ? `<circle cx="13" cy="3" r="2.75" fill="${FAVICON_DOTS[status]}" stroke="#0a1024" stroke-width="1"/>`
-    : "";
+function setFaviconAlert(alert) {
+  if (!faviconSvg || alert === faviconAlert) return;
+  faviconAlert = alert;
+  // Browsers may show the PNG fallback instead of the SVG icon (Brave does),
+  // and would then ignore the change below. Drop it so the SVG is used.
+  document.querySelector('link[rel="alternate icon"]')?.remove();
+  const dot = alert ? `<circle cx="13" cy="3" r="2.75" fill="${FAVICON_DOT}" stroke="#0a1024" stroke-width="1"/>` : "";
   $("favicon").href = `data:image/svg+xml,${encodeURIComponent(faviconSvg.replace("</svg>", `${dot}</svg>`))}`;
 }
 
@@ -412,11 +411,9 @@ function setOffline(offline) {
   document.body.classList.toggle("offline", show);
   if (show) {
     const since = offlineSince.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    banner.textContent =
-      `tunhub is not reachable (since ${since}). It may have stopped or be restarting; ` +
-      "this page keeps retrying. The services below show their last known state.";
+    banner.textContent = `Lost connection to tunhub at ${since}.`;
     $("summary").textContent = "offline";
-    setFaviconStatus("failing");
+    setFaviconAlert(true);
   }
 }
 
