@@ -7,8 +7,8 @@
 
 **Open the web UIs on your private network like any public website. tunhub sets up the SSH forwarding for you.**
 
-[![CI](https://github.com/LiukDiihMieu/tunhub/actions/workflows/ci.yml/badge.svg)](https://github.com/LiukDiihMieu/tunhub/actions/workflows/ci.yml)
-![Python](https://img.shields.io/badge/python-3.10%E2%80%933.13-blue)
+[![PyPI](https://img.shields.io/pypi/v/tunhub)](https://pypi.org/project/tunhub/)
+[![Python versions](https://img.shields.io/pypi/pyversions/tunhub)](https://pypi.org/project/tunhub/)
 ![Platforms](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey)
 [![License: GPL v3+](https://img.shields.io/badge/license-GPL--3.0--or--later-green)](https://github.com/LiukDiihMieu/tunhub/blob/main/LICENSE)
 
