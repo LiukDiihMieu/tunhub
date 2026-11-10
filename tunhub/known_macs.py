@@ -79,10 +79,16 @@ class KnownMacs:
         self._stamp = None  # force a re-read so line numbers are right
 
     def forget(self, ip: str) -> int:
-        """Remove every line for ``ip``; returns how many were removed."""
+        """Remove every line whose first field is ``ip``; returns how many were removed.
+
+        Raises ValueError if ``ip`` is not an IP address. Lines tunhub does not
+        understand (comments, ``@`` markers of later versions, typos) are kept.
+        """
+        target = _canonical_ip(ip)
+        if target is None:
+            raise ValueError(f"not an IP address: {ip!r}")
         if not self.path.exists():
             return 0
-        target = _canonical_ip(ip)
         kept, removed = [], 0
         for raw in self.path.read_text(encoding="utf-8").splitlines(keepends=True):
             fields = raw.split("#", 1)[0].split()

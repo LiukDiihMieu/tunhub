@@ -51,3 +51,75 @@ def test_example_services_cannot_reach_real_machines(tmp_path):
                 assert any(ipaddress.ip_address(route.target_host) in n for n in documentation)
             else:
                 assert route.ssh_host.startswith("example-")
+
+
+# ------------------------------------------------------------------ CLI contract
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["--config-dir", "X"],            # run is the default command
+        ["--config-dir", "X", "run"],
+        ["run", "--config-dir", "X"],
+    ],
+)
+def test_config_dir_before_or_after_the_command(argv):
+    from tunhub.cli import build_parser, cmd_run
+
+    args = build_parser().parse_args(argv)
+    assert args.handler is cmd_run and str(args.config_dir) == "X"
+
+
+def test_config_dir_given_before_init_reaches_init(tmp_path):
+    assert main(["--config-dir", str(tmp_path / "cfg"), "init"]) == 0
+    assert (tmp_path / "cfg" / "services.yaml").exists()
+
+
+def test_init_that_cannot_write_exits_1(tmp_path, capsys):
+    (tmp_path / "a-file").write_text("")
+    assert main(["init", "--config-dir", str(tmp_path / "a-file" / "cfg")]) == 1
+    assert "cannot write" in capsys.readouterr().err
+
+
+def test_forget_rejects_a_non_ip_and_changes_nothing(tmp_path, capsys):
+    text = "# comment\n@revoked 10.0.0.9 aa:bb:cc:dd:ee:09\nnot-an-ip junk\n10.0.0.1 aa:bb:cc:dd:ee:01\n"
+    (tmp_path / "known_macs").write_text(text)
+    assert main(["forget", "nas", "--config-dir", str(tmp_path)]) == 2
+    assert "not an IP address" in capsys.readouterr().err
+    assert (tmp_path / "known_macs").read_text() == text  # used to delete the non-IP lines
+
+
+def test_forget_removes_only_lines_for_that_ip(tmp_path):
+    (tmp_path / "known_macs").write_text(
+        "# comment\n@revoked 10.0.0.1 aa:bb:cc:dd:ee:09\nnot-an-ip junk\n10.0.0.1 aa:bb:cc:dd:ee:01\n10.0.0.2 aa:bb:cc:dd:ee:02\n"
+    )
+    assert main(["forget", "10.0.0.1", "--config-dir", str(tmp_path)]) == 0
+    assert (tmp_path / "known_macs").read_text() == (
+        "# comment\n@revoked 10.0.0.1 aa:bb:cc:dd:ee:09\nnot-an-ip junk\n10.0.0.2 aa:bb:cc:dd:ee:02\n"
+    )
+
+
+@pytest.mark.parametrize("is_installed, code", [(True, 0), (False, 1)])
+def test_service_status_exit_code(monkeypatch, capsys, is_installed, code):
+    from tunhub import autostart
+
+    monkeypatch.setattr(autostart, "status", lambda: "status text")
+    monkeypatch.setattr(autostart, "installed", lambda: is_installed)
+    assert main(["service", "status"]) == code
+    assert "status text" in capsys.readouterr().out
+
+
+def test_service_install_always_records_the_config_dir(monkeypatch, tmp_path):
+    # The service starts without this shell's environment, so the directory
+    # in use here must be written into it even when it is the default one.
+    from tunhub import autostart
+
+    seen = []
+    monkeypatch.setattr(autostart, "install", lambda config_dir: seen.append(config_dir) or "installed")
+    # The default directory, e.g. from XDG_CONFIG_HOME set in this shell only;
+    # it used to be left out, and the service then read ~/.config/tunhub.
+    monkeypatch.delenv("TUNHUB_CONFIG_DIR", raising=False)
+    monkeypatch.setattr("tunhub.cli.default_config_dir", lambda: tmp_path)
+    assert main(["service", "install"]) == 0
+    assert seen == [tmp_path.resolve()]

@@ -1,10 +1,15 @@
-"""Command line: ``tunhub [run|init|service] ...``."""
+"""Command line: ``tunhub [run|init|service|forget] ...``.
+
+Exit codes (part of the compatibility policy): 0 success; 1 the operation
+could not be done (e.g. a file could not be written, autostart failed, the
+autostart entry is not installed); 2 invalid arguments or configuration.
+"""
 
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import logging
-import os
 import sys
 from importlib import resources
 from pathlib import Path
@@ -32,15 +37,18 @@ def build_parser() -> argparse.ArgumentParser:
         description="One local dashboard for your SSH-tunnelled and LAN services.",
     )
     parser.add_argument("--version", action="version", version=f"tunhub {__version__}")
+    config_help = (
+        f"directory with {SHARED_FILE} and optional {LOCAL_FILE} "
+        f"(default: ${CONFIG_DIR_ENV} or {default_config_dir()})"
+    )
+    # Also accepted before the command: `tunhub --config-dir X` (run is the default).
+    parser.add_argument("--config-dir", type=Path, help=config_help)
     parser.set_defaults(handler=cmd_run, config_dir=None, log_file=None)
 
     config_option = argparse.ArgumentParser(add_help=False)
-    config_option.add_argument(
-        "--config-dir",
-        type=Path,
-        help=f"directory with {SHARED_FILE} and optional {LOCAL_FILE} "
-        f"(default: ${CONFIG_DIR_ENV} or {default_config_dir()})",
-    )
+    # SUPPRESS: without the option, a subcommand must not overwrite a value
+    # given before the command (`tunhub --config-dir X run`).
+    config_option.add_argument("--config-dir", type=Path, default=argparse.SUPPRESS, help=config_help)
 
     commands = parser.add_subparsers(title="commands", metavar="COMMAND")
 
@@ -125,10 +133,14 @@ def cmd_init(args: argparse.Namespace) -> int:
         print(f"tunhub: {target} already exists (use --force to overwrite)", file=sys.stderr)
         return 1
 
-    config_dir.mkdir(parents=True, exist_ok=True)
     templates = resources.files("tunhub") / "templates"
-    for name in TEMPLATES:
-        (config_dir / name).write_text((templates / name).read_text(encoding="utf-8"), encoding="utf-8")
+    try:
+        config_dir.mkdir(parents=True, exist_ok=True)
+        for name in TEMPLATES:
+            (config_dir / name).write_text((templates / name).read_text(encoding="utf-8"), encoding="utf-8")
+    except OSError as exc:
+        print(f"tunhub: cannot write to {config_dir}: {exc}", file=sys.stderr)
+        return 1
 
     print(f"created {target}")
     print(f"created {config_dir / 'local.example.yaml'}")
@@ -137,21 +149,22 @@ def cmd_init(args: argparse.Namespace) -> int:
 
 
 def cmd_service(args: argparse.Namespace) -> int:
-    from .autostart import AutostartError, install, status, uninstall
+    from . import autostart
 
-    # Bake a non-default config dir into the service; the service won't see this shell's env.
-    explicit = args.config_dir or (Path(os.environ[CONFIG_DIR_ENV]) if os.environ.get(CONFIG_DIR_ENV) else None)
     try:
         if args.action == "install":
-            config_dir = explicit or default_config_dir()
+            # Always record the config dir this shell uses: the service starts
+            # without this shell's environment (TUNHUB_CONFIG_DIR, XDG_CONFIG_HOME).
+            config_dir = resolve_config_dir(args).resolve()
             if not (config_dir / SHARED_FILE).exists():
                 print(f"tunhub: warning: no {SHARED_FILE} in {config_dir} yet (run `tunhub init`)", file=sys.stderr)
-            print(install(explicit))
+            print(autostart.install(config_dir))
         elif args.action == "uninstall":
-            print(uninstall())
+            print(autostart.uninstall())
         else:
-            print(status())
-    except AutostartError as exc:
+            print(autostart.status())
+            return 0 if autostart.installed() else 1
+    except autostart.AutostartError as exc:
         print(f"tunhub: {exc}", file=sys.stderr)
         return 1
     return 0
@@ -159,6 +172,11 @@ def cmd_service(args: argparse.Namespace) -> int:
 
 def cmd_forget(args: argparse.Namespace) -> int:
     path = resolve_config_dir(args) / KNOWN_MACS_FILE
+    try:
+        ipaddress.ip_address(args.ip)
+    except ValueError:
+        print(f"tunhub: {args.ip!r} is not an IP address (known_macs lists IP addresses)", file=sys.stderr)
+        return 2
     try:
         removed = KnownMacs(path).forget(args.ip)
     except (OSError, ValueError) as exc:
