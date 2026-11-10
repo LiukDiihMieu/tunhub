@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import html
-import socket
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -127,7 +126,7 @@ def create_app(hub: Hub) -> FastAPI:
     async def state() -> JSONResponse:
         return JSONResponse(
             {
-                "client": socket.gethostname(),
+                "machine": hub.config.machine,
                 "version": __version__,
                 "hub": f"http://{settings.hostname}:{settings.port}",
                 # Where to edit the services, and whether the file exists yet.
@@ -135,6 +134,8 @@ def create_app(hub: Hub) -> FastAPI:
                     "path": str(hub.config_dir / SHARED_FILE),
                     "found": hub.config.found,
                     "init_command": init_command,
+                    "local_path": str(hub.config.local_path) if hub.config.local_path else None,
+                    "local_found": hub.config.local_found,
                     "warnings": hub.warnings,
                 },
                 "services": [

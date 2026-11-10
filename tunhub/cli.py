@@ -15,11 +15,11 @@ from importlib import resources
 from pathlib import Path
 
 from . import __version__
-from .config import DEFAULT_HUB_PORT, LOCAL_FILE, SHARED_FILE, ConfigError
+from .config import DEFAULT_HUB_PORT, LOCAL_FILE, SHARED_FILE, ConfigError, local_file_name
 from .known_macs import FILE_NAME as KNOWN_MACS_FILE
 from .known_macs import KnownMacs
 from .winjob import kill_children_on_exit
-from .paths import CONFIG_DIR_ENV, default_config_dir, default_log_file
+from .paths import CONFIG_DIR_ENV, default_config_dir, default_log_file, machine_name
 
 TEMPLATES = ("services.yaml", "local.example.yaml")
 
@@ -144,6 +144,7 @@ def cmd_init(args: argparse.Namespace) -> int:
 
     print(f"created {target}")
     print(f"created {config_dir / 'local.example.yaml'}")
+    print(f"this machine's overrides go in {local_file_name(machine_name())} (see local.example.yaml)")
     print(f"next: edit the example services, then run `tunhub` and open http://hub.localhost:{DEFAULT_HUB_PORT}")
     return 0
 

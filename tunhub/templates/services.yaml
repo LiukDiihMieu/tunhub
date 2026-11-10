@@ -1,7 +1,8 @@
 # tunhub service definitions.
 #
-# Share this file between your machines (e.g. via a dotfiles repo). Per-machine
-# tweaks go into local.yaml next to it; see local.example.yaml.
+# Share this file between your machines (e.g. via a dotfiles repo) and keep it
+# the same everywhere. What differs per machine goes into local.<machine>.yaml
+# next to it; see local.example.yaml.
 #
 # Every service listens on a FIXED local port. Web services are opened as
 #   http://<id>.localhost:<local_port>   (Chromium-based browsers and Firefox resolve
@@ -27,7 +28,7 @@
 #   icon         image file relative to this directory (default: discovered
 #                from the web service, else coloured initials)
 #   description  shown in the dashboard
-#   enabled      false hides the service             (handy in local.yaml)
+#   enabled      false hides the service    (handy in local.<machine>.yaml)
 
 # Optional: the tunhub versions this file is written for. An older tunhub then
 # says "please upgrade" instead of misreading newer settings.
