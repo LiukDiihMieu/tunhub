@@ -35,6 +35,19 @@ def test_local_example_merges_cleanly(tmp_path):
     assert config.services["jupyter"].routes[0].kind == "direct"
 
 
-def test_run_without_config_points_to_init(tmp_path, capsys):
-    assert main(["run", "--config-dir", str(tmp_path / "missing")]) == 2
-    assert "tunhub init" in capsys.readouterr().err
+def test_example_services_cannot_reach_real_machines(tmp_path):
+    # Documentation addresses (RFC 5737) and ssh aliases that do not exist, so
+    # the examples never connect to a device that happens to be on the LAN.
+    import ipaddress
+
+    main(["init", "--config-dir", str(tmp_path)])
+    config = load_config(tmp_path)
+    assert set(config.services) == {"nas", "jupyter", "desktop"}
+    documentation = [ipaddress.ip_network(n) for n in ("192.0.2.0/24", "198.51.100.0/24", "203.0.113.0/24")]
+    for service in config.services.values():
+        assert service.name.startswith("Example ")
+        for route in service.routes:
+            if route.kind == "direct":
+                assert any(ipaddress.ip_address(route.target_host) in n for n in documentation)
+            else:
+                assert route.ssh_host.startswith("example-")

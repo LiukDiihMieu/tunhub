@@ -329,6 +329,34 @@ $("d-refresh-icon").addEventListener("click", async () => {
   poll();
 });
 
+// ------------------------------------------------------------------ setup
+
+/** Where the config lives; a setup guide while no service is configured. */
+function renderSetup(config, empty) {
+  $("reload").title = `Re-read ${config.path} (and local.yaml next to it)`;
+  $("setup").hidden = !empty;
+  if (!empty) return;
+  $("setup-lead").textContent = config.found
+    ? "Your configuration file has no services yet."
+    : "There is no configuration file yet. Create it with the example below.";
+  $("setup-path").textContent = config.path;
+  $("setup-init").textContent = config.init_command;
+  $("setup-create").hidden = config.found;
+}
+
+const copyButtons = {
+  "setup-copy-path": ["setup-path", "Path copied"],
+  "setup-copy-init": ["setup-init", "Command copied"],
+  "setup-copy-example": ["setup-example", "Example copied"],
+};
+for (const [button, [source, message]] of Object.entries(copyButtons)) {
+  $(button).addEventListener("click", async () => {
+    await copyText($(source).textContent);
+    toast(message);
+  });
+}
+$("setup-reload").addEventListener("click", () => $("reload").click());
+
 // --------------------------------------------------------------- favicon
 
 // The tab icon gets a dot while a service is connecting (amber) or failing
@@ -365,6 +393,7 @@ async function poll() {
     return;
   }
   hubUrl = data.hub;
+  renderSetup(data.config, data.services.length === 0);
   $("client").textContent = `on ${data.client}`;
 
   const seen = new Set();

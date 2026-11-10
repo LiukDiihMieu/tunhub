@@ -29,13 +29,47 @@
     <div class="topbar-actions">
       <span id="summary" class="muted"></span>
       <button id="disconnect-ssh" class="btn ghost stop" title="Stop every service using ssh; direct connections stay up" disabled>Disconnect SSH</button>
-      <button id="reload" class="btn ghost" title="Re-read services.yaml and local.yaml">Reload config</button>
+      <button id="reload" class="btn ghost">Reload config</button>
     </div>
   </header>
 
   <div id="banner" class="banner" hidden></div>
 
   <main id="services" class="grid"></main>
+
+  <!-- Shown while no service is configured: how to get started. -->
+  <section id="setup" class="setup" hidden>
+    <h2>Add your first service</h2>
+    <p id="setup-lead" class="muted"></p>
+
+    <div class="setup-field">
+      <div class="setup-label">Configuration file</div>
+      <div class="setup-value"><code id="setup-path"></code><button class="icon-btn" id="setup-copy-path">Copy</button></div>
+    </div>
+
+    <!-- tunhub init refuses to overwrite a file, so it is only offered while there is none. -->
+    <div class="setup-field" id="setup-create">
+      <div class="setup-label">Or start from a commented template</div>
+      <div class="setup-value"><code id="setup-init"></code><button class="icon-btn" id="setup-copy-init">Copy</button></div>
+    </div>
+
+    <p>Add this example and adapt it to your setup:</p>
+    <div class="code-block">
+      <div class="code-bar"><span>services.yaml</span><button class="icon-btn" id="setup-copy-example">Copy example</button></div>
+      <pre id="setup-example">services:
+  nas:
+    local_port: 15000
+    routes:
+      - direct: 192.168.1.10:5000   # at home
+      - ssh: nas                    # elsewhere: a Host from ~/.ssh/config
+        remote: 127.0.0.1:5000</pre>
+    </div>
+
+    <div class="setup-reload">
+      <span>Save the file, then reload the configuration.</span>
+      <button class="btn primary" id="setup-reload">Reload config</button>
+    </div>
+  </section>
 
   <!-- Front of a service: launch by clicking the icon. -->
   <template id="tile-template">

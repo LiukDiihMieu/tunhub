@@ -8,7 +8,7 @@ machine is deep-merged on top of it to override or disable services locally.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -123,6 +123,9 @@ class Config:
     hub: HubSettings
     tunnel: TunnelSettings
     services: dict[str, Service]
+    # False when services.yaml does not exist yet (the dashboard then shows
+    # how to create it instead of refusing to start).
+    found: bool = True
 
 
 # ---------------------------------------------------------------------------
@@ -130,16 +133,16 @@ class Config:
 
 
 def load_config(config_dir: Path) -> Config:
+    """Read services.yaml (+ local.yaml). A missing services.yaml is an empty config."""
     shared_path = config_dir / SHARED_FILE
-    if not shared_path.exists():
-        raise ConfigError(f"{shared_path} not found")
-    raw = _read_yaml(shared_path)
+    found = shared_path.exists()
+    raw = _read_yaml(shared_path) if found else {}
 
     local_path = config_dir / LOCAL_FILE
     if local_path.exists():
         raw = deep_merge(raw, _read_yaml(local_path))
 
-    return parse_config(raw)
+    return replace(parse_config(raw), found=found)
 
 
 def parse_config(raw: dict[str, Any]) -> Config:

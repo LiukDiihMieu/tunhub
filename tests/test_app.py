@@ -195,3 +195,41 @@ def test_open_rejects_requests_from_other_pages(setup, headers, allowed):
     else:
         assert response.status_code == 403
         assert hub.get("web").mode is not Mode.MANUAL  # the request started nothing
+
+
+def test_dashboard_starts_without_config_and_picks_it_up_on_reload(tmp_path):
+    hub = Hub(tmp_path)  # no services.yaml yet
+    client = TestClient(create_app(hub), base_url="http://hub.localhost:8765", follow_redirects=False)
+    with client:
+        state = client.get("/api/state").json()
+        assert state["services"] == []
+        assert state["config"]["found"] is False
+        assert state["config"]["path"] == str(tmp_path / "services.yaml")
+        assert state["config"]["init_command"] == f'tunhub init --config-dir "{tmp_path}"'
+
+        (tmp_path / "services.yaml").write_text(
+            f"services:\n  web:\n    local_port: {free_port()}\n    routes: [{{direct: '127.0.0.1:1'}}]\n"
+        )
+        assert client.post("/api/reload", headers={"X-Tunhub": "1"}).json()["messages"] == ["added web"]
+        state = client.get("/api/state").json()
+        assert state["config"]["found"] is True and [s["id"] for s in state["services"]] == ["web"]
+
+
+def test_init_command_is_plain_for_the_default_config_dir(tmp_path, monkeypatch):
+    monkeypatch.setattr("tunhub.app.default_config_dir", lambda: tmp_path)
+    client = TestClient(create_app(Hub(tmp_path)), base_url="http://hub.localhost:8765")
+    with client:
+        assert client.get("/api/state").json()["config"]["init_command"] == "tunhub init"
+
+
+def test_reload_keeps_the_old_config_when_the_file_disappears(setup):
+    # A moved/renamed services.yaml (or an editor's save in progress) must not
+    # drop every running service; only a first start treats "missing" as empty.
+    client, hub, *_ = setup
+    client.get("/open/web")
+    running = hub.get("web")
+    (hub.config_dir / "services.yaml").rename(hub.config_dir / "services.yaml.bak")
+    response = client.post("/api/reload", headers={"X-Tunhub": "1"})
+    assert response.status_code == 400
+    assert "not found" in response.json()["error"]
+    assert hub.get("web") is running and running.desired

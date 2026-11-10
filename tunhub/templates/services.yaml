@@ -45,43 +45,38 @@ tunnel:
   # auto_direct: true       # bring services up by themselves when a direct route is reachable
   # auto_direct_interval: 15  # seconds between probes
 
-# Example services: replace the addresses and ssh aliases with your own.
+# Three examples, one per kind of setup. They use documentation addresses
+# (192.0.2.x, RFC 5737) and ssh aliases that do not exist, so they never reach
+# a real machine. Replace both with your own, then rename or delete freely
+# and click "Reload config" in the dashboard.
 services:
+  # A web UI on your home network: direct at home, through ssh elsewhere.
   nas:
-    name: NAS
+    name: Example NAS
+    description: "Example: replace the addresses with your NAS's"
     local_port: 15000
     routes:
-      - direct: 192.168.1.10:5000       # at home: straight to the NAS
-      - ssh: nas                        # elsewhere: through ssh
-        remote: 127.0.0.1:5000
+      - direct: 192.0.2.10:5000         # at home: straight to the NAS
+      - ssh: example-nas                # elsewhere: a Host alias from ~/.ssh/config
+        remote: 127.0.0.1:5000          # the web UI as seen from that host
+    # Some apps check the port in the Host header (e.g. qBittorrent): for
+    # those, keep local_port equal to the app's own port.
 
-  adguard:
-    name: AdGuard Home
-    local_port: 13000
-    routes:
-      - direct: 192.168.1.10:3000
-      - ssh: nas
-        remote: 3000
-
-  qbittorrent:
-    name: qBittorrent
-    local_port: 8080                    # keep equal to the WebUI port (Host port check)
-    routes:
-      - direct: 192.168.1.10:8080
-      - ssh: nas
-        remote: 8080
-
+  # A web UI that is only reachable through ssh, e.g. on a lab workstation.
   jupyter:
-    name: Jupyter
+    name: Example Jupyter
+    description: "Example: replace the ssh alias with your workstation's"
     local_port: 18888
     routes:
-      - ssh: workstation
-        remote: 8888
+      - ssh: example-workstation
+        remote: 8888                    # a bare port means 127.0.0.1:8888
 
+  # Not a web page: a port for another client (RDP, VNC, a database, ...).
   desktop:
-    name: Workstation Desktop
-    type: tcp                           # point your RDP client at 127.0.0.1:13389
+    name: Example Desktop
+    description: "Example: point your RDP client at 127.0.0.1:13389"
+    type: tcp
     local_port: 13389
     routes:
-      - ssh: workstation
+      - ssh: example-workstation
         remote: 3389
