@@ -1,0 +1,62 @@
+name: release
+
+# Pushing a tag like v0.1.0 publishes that version. See docs/RELEASE_CHECKLIST.md.
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  # The full CI (every OS and Python version CI covers) must pass first.
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  # Build sdist and wheel once; PyPI and the GitHub Release get these exact files.
+  build-dist:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  # Trusted Publishing (OIDC, no token). The `pypi` environment requires a
+  # manual approval in GitHub, so the run waits here until you approve it.
+  publish-pypi:
+    needs: build-dist
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/tunhub/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  # A draft GitHub Release with generated notes and the same files attached.
+  # It stays private until you review it (e.g. paste the CHANGELOG section)
+  # and click Publish.
+  github-release:
+    needs: publish-pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: dist/*
