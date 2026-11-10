@@ -7,6 +7,7 @@ machine is deep-merged on top of it to override or disable services locally.
 
 from __future__ import annotations
 
+import difflib
 import ipaddress
 import re
 from dataclasses import dataclass, replace
@@ -25,6 +26,36 @@ SERVICE_TYPES = ("http", "https", "tcp")
 # inner hyphens, at most 63 characters.
 SERVICE_ID_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 _DNS_LABEL_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
+
+# Known keys per section. Unknown keys are warnings, not errors, so that an
+# older tunhub can still read a config written for a newer one.
+TOP_KEYS = ("hub", "tunnel", "services")
+HUB_KEYS = ("listen", "port", "hostname", "open_timeout")
+TUNNEL_KEYS = (
+    "ssh_command",
+    "ssh_options",
+    "probe_timeout",
+    "ready_timeout",
+    "health_timeout",
+    "auto_direct_interval",
+    "auto_direct",
+)
+SERVICE_KEYS = (
+    "name",
+    "description",
+    "type",
+    "local_port",
+    "hostname",
+    "path",
+    "icon",
+    "routes",
+    "autostart",
+    "health_check",
+    "auto_direct",
+    "enabled",
+)
+DIRECT_ROUTE_KEYS = ("direct", "label")
+SSH_ROUTE_KEYS = ("ssh", "remote", "label")
 
 DEFAULT_SSH_OPTIONS = {
     "ConnectTimeout": "10",
@@ -132,6 +163,8 @@ class Config:
     # False when services.yaml does not exist yet (the dashboard then shows
     # how to create it instead of refusing to start).
     found: bool = True
+    # Problems that do not stop tunhub (e.g. an unknown key); shown on the dashboard.
+    warnings: tuple[str, ...] = ()
 
 
 # ---------------------------------------------------------------------------
@@ -144,16 +177,24 @@ def load_config(config_dir: Path) -> Config:
     found = shared_path.exists()
     raw = _read_yaml(shared_path) if found else {}
 
+    shared_warnings = _shared_file_warnings(raw)
+
     local_path = config_dir / LOCAL_FILE
     if local_path.exists():
         raw = deep_merge(raw, _read_yaml(local_path))
 
-    return replace(parse_config(raw), found=found)
+    config = parse_config(raw)
+    return replace(config, found=found, warnings=config.warnings + tuple(shared_warnings))
 
 
 def parse_config(raw: dict[str, Any]) -> Config:
-    hub = _parse_hub(_mapping(raw.get("hub"), "hub"))
+    warnings: list[str] = []
+    _warn_unknown_keys(raw, TOP_KEYS, "config", warnings)
+    hub_raw = _mapping(raw.get("hub"), "hub")
+    _warn_unknown_keys(hub_raw, HUB_KEYS, "hub", warnings)
+    hub = _parse_hub(hub_raw)
     tunnel_raw = _mapping(raw.get("tunnel"), "tunnel")
+    _warn_unknown_keys(tunnel_raw, TUNNEL_KEYS, "tunnel", warnings)
     tunnel = _parse_tunnel(tunnel_raw)
     auto_direct_default = _flag(tunnel_raw, "auto_direct", True, "tunnel")
 
@@ -163,11 +204,11 @@ def parse_config(raw: dict[str, Any]) -> Config:
         body = _mapping(body, f"service '{service_id}'")
         if not _flag(body, "enabled", True, f"service '{service_id}'"):
             continue
-        services[service_id] = _parse_service(service_id, body, auto_direct_default)
+        services[service_id] = _parse_service(service_id, body, auto_direct_default, warnings)
 
     _check_port_conflicts(hub, services)
     _check_hostname_conflicts(hub, services)
-    return Config(hub=hub, tunnel=tunnel, services=services)
+    return Config(hub=hub, tunnel=tunnel, services=services, warnings=tuple(warnings))
 
 
 def deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -218,7 +259,7 @@ def _parse_hub(raw: dict[str, Any]) -> HubSettings:
 
 
 def _parse_tunnel(raw: dict[str, Any]) -> TunnelSettings:
-    command = raw.get("ssh_command", "ssh")
+    command = _or_default(raw, "ssh_command", "ssh")
     if isinstance(command, str):
         command = [command]
     if not isinstance(command, list) or not command or not all(isinstance(part, str) for part in command):
@@ -238,10 +279,13 @@ def _parse_tunnel(raw: dict[str, Any]) -> TunnelSettings:
     )
 
 
-def _parse_service(service_id: str, body: dict[str, Any], auto_direct_default: bool = True) -> Service:
+def _parse_service(
+    service_id: str, body: dict[str, Any], auto_direct_default: bool, warnings: list[str]
+) -> Service:
     where = f"service '{service_id}'"
     if not SERVICE_ID_RE.match(service_id):
         raise ConfigError(f"{where}: id must match {SERVICE_ID_RE.pattern}")
+    _warn_unknown_keys(body, SERVICE_KEYS, where, warnings)
 
     service_type = _text(body, "type", "http", where).lower()
     if service_type not in SERVICE_TYPES:
@@ -259,7 +303,7 @@ def _parse_service(service_id: str, body: dict[str, Any], auto_direct_default: b
     if not isinstance(raw_routes, list) or not raw_routes:
         raise ConfigError(f"{where}: routes must be a non-empty list")
     routes = tuple(
-        _parse_route(item, f"{where}.routes[{index}]") for index, item in enumerate(raw_routes)
+        _parse_route(item, f"{where}.routes[{index}]", warnings) for index, item in enumerate(raw_routes)
     )
 
     return Service(
@@ -278,7 +322,7 @@ def _parse_service(service_id: str, body: dict[str, Any], auto_direct_default: b
     )
 
 
-def _parse_route(item: Any, where: str) -> Route:
+def _parse_route(item: Any, where: str, warnings: list[str]) -> Route:
     if not isinstance(item, dict):
         raise ConfigError(f"{where}: expected a mapping with 'direct' or 'ssh'")
     label = _text(item, "label", "", where)
@@ -290,10 +334,12 @@ def _parse_route(item: Any, where: str) -> Route:
             "Did you mean two routes (a '-' before 'ssh')?"
         )
     if "direct" in item:
+        _warn_unknown_keys(item, DIRECT_ROUTE_KEYS, f"{where} (direct)", warnings)
         host, port = parse_endpoint(item["direct"], where)
         return Route(kind="direct", target_host=host, target_port=port, label=label)
 
     if "ssh" in item:
+        _warn_unknown_keys(item, SSH_ROUTE_KEYS, f"{where} (ssh)", warnings)
         if "remote" not in item:
             raise ConfigError(f"{where}: ssh route needs 'remote' (host:port seen from the SSH server)")
         host, port = parse_endpoint(item["remote"], where, default_host="127.0.0.1")
@@ -303,6 +349,60 @@ def _parse_route(item: Any, where: str) -> Route:
         return Route(kind="ssh", target_host=host, target_port=port, ssh_host=alias, label=label)
 
     raise ConfigError(f"{where}: expected 'direct' or 'ssh'")
+
+
+# ---------------------------------------------------------------------------
+# Warnings
+
+
+def _warn_unknown_keys(raw: dict[str, Any], known: tuple[str, ...], where: str, warnings: list[str]) -> None:
+    for key in raw:
+        key = str(key)
+        if key in known:
+            continue
+        message = f"{where}: unknown key '{key}' (ignored)"
+        close = difflib.get_close_matches(key, known, n=1)
+        if close:
+            message += f"; did you mean '{close[0]}'?"
+        warnings.append(message)
+
+
+def _is_loopback_host(host: str) -> bool:
+    if host.lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def _shared_file_warnings(shared: dict[str, Any]) -> list[str]:
+    """Direct routes to this machine do not belong in the shared file.
+
+    On every machine 127.0.0.1 is that machine itself, and known_macs cannot
+    check a loopback target. Lenient: errors are reported by parse_config().
+    """
+    warnings: list[str] = []
+    services = shared.get("services")
+    if not isinstance(services, dict):
+        return warnings
+    for service_id, body in services.items():
+        if not isinstance(body, dict) or body.get("enabled") is False or not isinstance(body.get("routes"), list):
+            continue
+        for index, route in enumerate(body["routes"]):
+            if not isinstance(route, dict) or "direct" not in route:
+                continue
+            try:
+                host, port = parse_endpoint(route["direct"], "")
+            except ConfigError:
+                continue
+            if _is_loopback_host(host):
+                warnings.append(
+                    f"{SHARED_FILE}: service '{service_id}'.routes[{index}] connects directly to "
+                    f"{format_endpoint(host, port)}, which is a different machine on every computer; "
+                    f"put this route in {LOCAL_FILE} on the machine that runs the service"
+                )
+    return warnings
 
 
 def _check_hostname_conflicts(hub: HubSettings, services: dict[str, Service]) -> None:

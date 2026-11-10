@@ -240,3 +240,55 @@ def test_state_reports_the_running_version(setup):
 
     client, *_ = setup
     assert client.get("/api/state").json()["version"] == __version__
+
+
+def test_host_names_outside_localhost_are_resolved_once(tmp_path):
+    import asyncio
+
+    (tmp_path / "services.yaml").write_text(
+        "hub: {hostname: tunhub.lan}\n"
+        "services:\n"
+        "  ok: {local_port: 15000, hostname: ok.lan, routes: [{ssh: nas, remote: 1}]}\n"
+        "  far: {local_port: 15001, hostname: far.lan, routes: [{ssh: nas, remote: 1}]}\n"
+        "  gone: {local_port: 15002, hostname: gone.lan, routes: [{ssh: nas, remote: 1}]}\n"
+        "  slow: {local_port: 15003, hostname: slow.lan, routes: [{ssh: nas, remote: 1}]}\n"
+        "  plain: {local_port: 15004, routes: [{ssh: nas, remote: 1}]}\n"
+        "  ip: {local_port: 15005, hostname: 127.0.0.1, routes: [{ssh: nas, remote: 1}]}\n"
+        "  rdp: {local_port: 15006, type: tcp, hostname: rdp.lan, routes: [{ssh: nas, remote: 1}]}\n"
+    )
+    asked = []
+
+    async def resolve(name):
+        asked.append(name)
+        if name == "slow.lan":
+            await asyncio.sleep(10)
+        if name == "gone.lan":
+            raise OSError("unknown host")
+        return {"tunhub.lan": ["127.0.0.1", "::1"], "ok.lan": ["127.0.0.1"], "far.lan": ["192.168.1.10"]}[name]
+
+    async def scenario():
+        hub = Hub(tmp_path, tmp_path / "cache", resolve=resolve)
+        warnings = await hub.check_hostnames(hub.config)
+        assert hub.warnings == warnings
+        return warnings
+
+    from tunhub import hub as hub_module
+
+    original = hub_module.RESOLVE_TIMEOUT
+    hub_module.RESOLVE_TIMEOUT = 0.2
+    try:
+        warnings = asyncio.run(scenario())
+    finally:
+        hub_module.RESOLVE_TIMEOUT = original
+    assert sorted(asked) == ["far.lan", "gone.lan", "ok.lan", "slow.lan", "tunhub.lan"]
+    assert len(warnings) == 3
+    assert "far.lan (service 'far') resolves to 192.168.1.10" in warnings[0]
+    assert "gone.lan (service 'gone') does not resolve" in warnings[1]
+    assert "slow.lan (service 'slow') does not resolve" in warnings[2]
+
+
+def test_state_lists_config_warnings(setup):
+    client, *_ = setup
+    warnings = client.get("/api/state").json()["config"]["warnings"]
+    # The fixture's direct route to 127.0.0.1 sits in services.yaml.
+    assert len(warnings) == 1 and "connects directly to 127.0.0.1" in warnings[0]

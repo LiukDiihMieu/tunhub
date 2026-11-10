@@ -258,7 +258,7 @@ def test_missing_services_yaml_is_an_empty_config(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Validation rules fixed for 0.2 (see COMPATIBILITY.md)
+# Validation rules that are part of the compatibility contract
 
 
 def _service(**fields):
@@ -385,3 +385,61 @@ def test_several_ssh_routes_are_fine():
     routes = [{"ssh": "nas", "remote": 5000}, {"ssh": "nas-cloudflare", "remote": 5000}]
     config = parse_config({"services": {"dsm": _service(routes=routes)}})
     assert [r.ssh_host for r in config.services["dsm"].routes] == ["nas", "nas-cloudflare"]
+
+
+# ---------------------------------------------------------------------------
+# Warnings: problems that do not stop tunhub
+
+
+def test_unknown_keys_are_warnings_with_suggestions():
+    raw = {
+        "hubb": {},
+        "hub": {"prot": 1111},
+        "tunnel": {"ssh_comand": "ssh"},
+        "services": {
+            "dsm": _service(
+                helth_check=False,
+                routes=[{"direct": "192.168.1.10:5000", "remote": 5000}, {"ssh": "nas", "remote": 5000, "lable": "x"}],
+            )
+        },
+    }
+    warnings = parse_config(raw).warnings
+    assert warnings == (
+        "config: unknown key 'hubb' (ignored); did you mean 'hub'?",
+        "hub: unknown key 'prot' (ignored); did you mean 'port'?",
+        "tunnel: unknown key 'ssh_comand' (ignored); did you mean 'ssh_command'?",
+        "service 'dsm': unknown key 'helth_check' (ignored); did you mean 'health_check'?",
+        "service 'dsm'.routes[0] (direct): unknown key 'remote' (ignored)",
+        "service 'dsm'.routes[1] (ssh): unknown key 'lable' (ignored); did you mean 'label'?",
+    )
+
+
+def test_known_keys_give_no_warnings(tmp_path):
+    from importlib import resources
+
+    template = resources.files("tunhub") / "templates" / "services.yaml"
+    (tmp_path / "services.yaml").write_text(template.read_text(encoding="utf-8"))
+    assert load_config(tmp_path).warnings == ()
+
+
+def test_loopback_direct_route_in_shared_file_is_a_warning(tmp_path):
+    (tmp_path / "services.yaml").write_text(
+        "services:\n"
+        "  a: {local_port: 15000, routes: [{direct: '127.0.0.1:5000'}, {ssh: nas, remote: 5000}]}\n"
+        "  b: {local_port: 15001, routes: [{direct: 'localhost:5001'}]}\n"
+        "  c: {local_port: 15002, routes: [{direct: '[::1]:5002'}]}\n"
+        "  d: {local_port: 15003, routes: [{direct: '192.168.1.10:5003'}]}\n"
+        "  e: {local_port: 15004, enabled: false, routes: [{direct: '127.0.0.1:5004'}]}\n"
+    )
+    warnings = load_config(tmp_path).warnings
+    assert [w.split(".routes")[0] for w in warnings] == [
+        "services.yaml: service 'a'",
+        "services.yaml: service 'b'",
+        "services.yaml: service 'c'",
+    ]
+
+
+def test_loopback_direct_route_in_local_file_is_fine(tmp_path):
+    (tmp_path / "services.yaml").write_text("services:\n  a: {local_port: 15000, routes: [{ssh: nas, remote: 5000}]}\n")
+    (tmp_path / "local.yaml").write_text("services:\n  a: {routes: [{direct: '127.0.0.1:5000'}]}\n")
+    assert load_config(tmp_path).warnings == ()

@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import logging
+import socket
 from pathlib import Path
-from typing import Callable
+from typing import Awaitable, Callable
 
 from .config import SHARED_FILE, Config, ConfigError, HubSettings, Service, TunnelSettings, load_config
 from .icons import IconStore
@@ -16,6 +18,26 @@ from .service import Mode, ServiceRuntime
 
 logger = logging.getLogger("tunhub")
 
+# How long the host name check waits for one name to resolve.
+RESOLVE_TIMEOUT = 2.0
+
+
+async def resolve_host(name: str) -> list[str]:
+    """The addresses a host name resolves to (as the browser would see them)."""
+    infos = await asyncio.get_running_loop().getaddrinfo(name, None, type=socket.SOCK_STREAM)
+    return sorted({info[4][0] for info in infos})
+
+
+def _needs_resolving(name: str) -> bool:
+    """`*.localhost` always means this machine in browsers; IP addresses need no lookup."""
+    if name == "localhost" or name.endswith(".localhost"):
+        return False
+    try:
+        ipaddress.ip_address(name)
+    except ValueError:
+        return True
+    return False
+
 
 class Hub:
     def __init__(
@@ -25,11 +47,16 @@ class Hub:
         *,
         mac_lookup: Callable[[str], str | None] = next_hop_mac,
         fingerprint: Callable[[], NetworkFingerprint | None] = network_fingerprint,
+        resolve: Callable[[str], Awaitable[list[str]]] = resolve_host,
     ) -> None:
         self.config_dir = config_dir
         self.icons = IconStore(config_dir, cache_dir)
         self.guard = MacGuard(KnownMacs(config_dir / KNOWN_MACS_FILE), mac_lookup)
         self._fingerprint = fingerprint
+        self._resolve = resolve
+        # Host names that do not lead to this machine; found in the background
+        # after each (re)load, for the config they were computed from.
+        self._host_warnings: tuple[Config, list[str]] | None = None
         self._network_watcher: asyncio.Task | None = None
         self._background: set[asyncio.Task] = set()
         # Reload and shutdown replace runtimes; running two at once would leave
@@ -42,6 +69,14 @@ class Hub:
             service_id: self._make_runtime(service, self.config.tunnel)
             for service_id, service in self.config.services.items()
         }
+        _log_warnings(self.config.warnings)
+
+    @property
+    def warnings(self) -> list[str]:
+        """Config warnings for the dashboard; recomputed on every (re)load."""
+        found = self._host_warnings
+        host_warnings = found[1] if found is not None and found[0] is self.config else []
+        return [*self.config.warnings, *host_warnings]
 
     def get(self, service_id: str) -> ServiceRuntime | None:
         return self.runtimes.get(service_id)
@@ -53,12 +88,51 @@ class Hub:
         return runtime
 
     def _on_service_up(self, runtime: ServiceRuntime) -> None:
+        self._spawn(self.icons.ensure(runtime.service, runtime.log))
+
+    def _spawn(self, coroutine: Awaitable[None]) -> None:
         # Keep a reference so the task is not garbage-collected mid-flight.
-        task = asyncio.create_task(self.icons.ensure(runtime.service, runtime.log))
+        task = asyncio.create_task(coroutine)
         self._background.add(task)
         task.add_done_callback(self._background.discard)
 
+    async def check_hostnames(self, config: Config) -> list[str]:
+        """Warn about host names that do not resolve to this machine.
+
+        The browser must reach tunhub under each service's host name; a name
+        outside `.localhost` works only with an entry in the hosts file (or DNS).
+        """
+        users: dict[str, list[str]] = {}
+        if _needs_resolving(config.hub.hostname):
+            users.setdefault(config.hub.hostname, []).append("the dashboard")
+        for service in config.services.values():
+            if service.is_web and _needs_resolving(service.hostname):
+                users.setdefault(service.hostname, []).append(f"service '{service.id}'")
+
+        async def check(name: str) -> str | None:
+            who = ", ".join(users[name])
+            try:
+                addresses = await asyncio.wait_for(self._resolve(name), RESOLVE_TIMEOUT)
+            except (OSError, asyncio.TimeoutError):
+                addresses = []
+            if not addresses:
+                return f"host name {name} ({who}) does not resolve; add '127.0.0.1 {name}' to the hosts file"
+            if not all(ipaddress.ip_address(a.split("%")[0]).is_loopback for a in addresses):
+                return (
+                    f"host name {name} ({who}) resolves to {', '.join(addresses)}, not to this machine; "
+                    "the browser would bypass tunhub"
+                )
+            return None
+
+        results = await asyncio.gather(*(check(name) for name in users))
+        warnings = [warning for warning in results if warning]
+        if self.config is config:
+            self._host_warnings = (config, warnings)
+            _log_warnings(warnings)
+        return warnings
+
     async def start(self) -> None:
+        self._spawn(self.check_hostnames(self.config))
         for runtime in self.runtimes.values():
             runtime.activate()
             if runtime.service.autostart:
@@ -181,6 +255,8 @@ class Hub:
         await asyncio.gather(*(runtime.close() for runtime in to_stop))
         self.config = new_config
         self.runtimes = new_runtimes
+        _log_warnings(new_config.warnings)
+        self._spawn(self.check_hostnames(new_config))
         for runtime in new_runtimes.values():
             runtime.activate()  # no-op for runtimes that kept running
         for runtime in to_start:
@@ -191,6 +267,11 @@ class Hub:
         for message in messages:
             logger.info("reload: %s", message)
         return messages
+
+
+def _log_warnings(warnings: tuple[str, ...] | list[str]) -> None:
+    for warning in warnings:
+        logger.warning("config: %s", warning)
 
 
 __all__ = ["Hub", "ConfigError"]
