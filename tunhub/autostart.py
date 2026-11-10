@@ -175,6 +175,21 @@ def uninstall() -> str:
     raise AutostartError(f"unsupported platform: {sys.platform}")
 
 
+def installed() -> bool:
+    """Whether the login autostart entry exists (not whether tunhub is running)."""
+    if sys.platform.startswith("linux"):
+        return systemd_unit_path().exists()
+    if sys.platform == "darwin":
+        return launchd_plist_path().exists()
+    if sys.platform == "win32":
+        result = _powershell(
+            f"if (Get-ScheduledTask -TaskName {_ps_quote(WINDOWS_TASK)} -ErrorAction SilentlyContinue) {{ 'yes' }}",
+            check=False,
+        )
+        return result.stdout.strip() == "yes"
+    raise AutostartError(f"unsupported platform: {sys.platform}")
+
+
 def status() -> str:
     if sys.platform.startswith("linux"):
         result = _run(["systemctl", "--user", "status", SYSTEMD_UNIT, "--no-pager"], check=False)
