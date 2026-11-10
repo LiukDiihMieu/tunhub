@@ -173,16 +173,42 @@ The **⋯** button on a tile shows its address, bookmark URL, route choice and l
 
 To use another directory, set `TUNHUB_CONFIG_DIR` or pass `--config-dir`.
 
-- **`services.yaml`** is the shared definition. Keep it in a dotfiles repo to
-  sync it between your machines.
-- **`local.yaml`** holds optional per-machine overrides and is merged on top of
-  `services.yaml`: mappings key by key, lists such as `routes` as a whole. Use it when a
-  machine *is* one of the servers (reach its services via `127.0.0.1`, hide its
-  own remote desktop with `enabled: false`), or when a port is taken.
-  See `local.example.yaml`.
+- **`services.yaml`** is the shared definition: the same file on every
+  machine. Sync the whole directory between your machines (a dotfiles repo,
+  a synced folder, ...).
+- **`local.<machine>.yaml`** holds optional overrides for one machine and is
+  merged on top of `services.yaml`: mappings key by key, lists such as
+  `routes` as a whole. `<machine>` is the name shown next to the dashboard's
+  title (the host name, lowercased, up to the first dot; `TUNHUB_MACHINE`
+  sets another). Each machine reads only its own file. See
+  `local.example.yaml`.
 
-Click **Reload config** in the dashboard after editing. Services whose definition did not
-change keep their connections. Changes to the `hub:` section need a restart.
+Write the routes as "how to reach this service from my other computers":
+`direct` for networks where you can reach it directly (one `direct` per
+network if its address differs), `ssh` for everywhere else. Keep machine
+differences out of `services.yaml`:
+
+- If machines reach a server differently over ssh (a jump host from outside,
+  a plain connection inside), give the same `Host` alias a different
+  definition in each machine's `~/.ssh/config`.
+- A port that is taken on one machine, or a service that one machine should
+  not show (`enabled: false`), goes into that machine's local file.
+
+Click **Reload config** in the dashboard after editing. Services whose
+definition did not change keep their connections. Changes to the `hub:`
+section need a restart. Problems that do not stop tunhub, such as a misspelt
+key, are shown in a yellow box on the dashboard until you fix them.
+
+<details>
+<summary>Running tunhub on the machine that hosts a service</summary>
+
+Nothing special is needed. If the service listens on the LAN, its `direct`
+route works on that machine too. If it only listens on 127.0.0.1, the `ssh`
+route still works (ssh to itself). To skip ssh there, add a
+`direct: 127.0.0.1:<port>` route in **that machine's** local file, never in
+`services.yaml`: 127.0.0.1 is a different machine on every computer. Its
+`local_port` must differ from the service's own port.
+</details>
 
 Every key is explained in the comments of the example files that `tunhub init`
 writes: [`services.yaml`](https://github.com/LiukDiihMieu/tunhub/blob/main/tunhub/templates/services.yaml) and
@@ -200,8 +226,13 @@ tunhub service install     # also: uninstall, status
 | macOS   | LaunchAgent                        | `~/Library/Logs/tunhub.log` |
 | Windows | Task Scheduler (`pythonw`, no console window) | `%LOCALAPPDATA%\tunhub\tunhub.log` |
 
-The service runs the same Python interpreter that installed it. If you pass
-`--config-dir` (or have `TUNHUB_CONFIG_DIR` set), it is written into the service.
+The service runs the same Python interpreter that installed it, with the
+config directory that `tunhub service install` used (written into the
+service, so it does not depend on your shell's environment). After moving the
+config directory, run `tunhub service install` again.
+
+This starts *tunhub* at login. A service's `autostart: true` is different: it
+connects that service whenever tunhub starts.
 On Linux, the systemd user session must see your ssh-agent (`SSH_AUTH_SOCK`);
 GNOME's agent normally takes care of that.
 
@@ -272,6 +303,29 @@ not when an address is handed to another machine on the same network.
   is for the places where you can't or don't want to: university or company
   machines reachable only over SSH, jump hosts, or a NAS you would rather not
   run a VPN on.
+
+## What tunhub is not
+
+- **Not a VPN** and nothing to install on your servers: it uses the SSH access
+  you already have. For a mesh network, use Tailscale, ZeroTier or WireGuard.
+- **Not a way to publish services**: everything listens on 127.0.0.1, and the
+  dashboard is for you alone, with no login and no access from other devices.
+  For public URLs, see ngrok or Tailscale Funnel.
+- **Not an SSH client**: it runs your system's OpenSSH with your
+  `~/.ssh/config`, so jump hosts, certificates, agents and hardware keys work
+  as they do in your terminal.
+- **Not an HTTP proxy**: it forwards bytes, so any protocol works, but it
+  does not rewrite headers or terminate TLS.
+- **Not a monitoring or discovery tool**: it opens the services you list. For
+  status pages and alerts, see Uptime Kuma or Homepage.
+- **Not a config editor**: you write the YAML; tunhub never changes it.
+
+## Compatibility
+
+Config files, bookmarks (`/open/<id>`), service addresses, `known_macs` and
+the command line are stable across upgrades; changes go through a deprecation
+period. The HTTP API under `/api/` is internal to the dashboard. Details:
+[COMPATIBILITY.md](https://github.com/LiukDiihMieu/tunhub/blob/main/COMPATIBILITY.md).
 
 ## Development
 
