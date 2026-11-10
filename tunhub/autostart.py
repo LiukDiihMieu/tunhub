@@ -28,7 +28,8 @@ def run_command(config_dir: Path | None) -> list[str]:
     """The command the service runs: this interpreter, so uv/pipx tool venvs work."""
     argv = [sys.executable, "-m", "tunhub", "run"]
     if config_dir is not None:
-        argv += ["--config-dir", str(config_dir.resolve())]
+        # Absolute, but symlinks kept: a dotfiles symlink may be re-pointed later.
+        argv += ["--config-dir", os.path.abspath(config_dir)]
     return argv
 
 

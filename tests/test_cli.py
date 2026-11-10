@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 import yaml
 
@@ -122,4 +124,21 @@ def test_service_install_always_records_the_config_dir(monkeypatch, tmp_path):
     monkeypatch.delenv("TUNHUB_CONFIG_DIR", raising=False)
     monkeypatch.setattr("tunhub.cli.default_config_dir", lambda: tmp_path)
     assert main(["service", "install"]) == 0
-    assert seen == [tmp_path.resolve()]
+    assert seen == [tmp_path]
+
+
+def test_service_install_keeps_symlinks_in_the_config_dir(monkeypatch, tmp_path):
+    # A dotfiles symlink may be re-pointed later; the service must follow it.
+    from tunhub import autostart
+
+    (tmp_path / "real").mkdir()
+    try:
+        (tmp_path / "link").symlink_to(tmp_path / "real")
+    except OSError:  # Windows without the symlink privilege
+        pytest.skip("cannot create symlinks here")
+    seen = []
+    monkeypatch.setattr(autostart, "install", lambda config_dir: seen.append(config_dir) or "installed")
+    monkeypatch.chdir(tmp_path)
+    assert main(["service", "install", "--config-dir", "link"]) == 0
+    assert seen == [tmp_path / "link"]
+    assert autostart.run_command(Path("link"))[-1] == str(tmp_path / "link")

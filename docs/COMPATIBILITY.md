@@ -8,6 +8,10 @@ They are maintainer guidelines, not yet a formal promise to users; that may
 come once the design has been stable for a while. `tests/test_contract.py`
 checks the interfaces listed here.
 
+The rules apply to changes made after they were written down. The changes in
+the same changelog section (stricter configuration, `local.<machine>.yaml`,
+the default port) came just before them and ship in a 0.1.x release.
+
 ## Versions
 
 tunhub uses `MAJOR.MINOR.PATCH` version numbers.
@@ -40,9 +44,9 @@ tunhub uses `MAJOR.MINOR.PATCH` version numbers.
   first dot: `Laptop.lan` reads `local.laptop.yaml`. The dashboard shows it
   next to its title.
 - **tunhub never modifies a file you write** (`services.yaml`,
-  `local.<machine>.yaml`). Only `tunhub init` creates them, and
-  `local.example.yaml` belongs to tunhub (`tunhub init --force` overwrites
-  it). A later version may add files of its own to the directory, such as
+  `local.<machine>.yaml`). Only `tunhub init` creates `services.yaml`, and
+  only `tunhub init --force` overwrites it, when you ask for that.
+  `local.example.yaml` belongs to tunhub (`init --force` overwrites it too). A later version may add files of its own to the directory, such as
   per-machine state, but never edits yours.
 - Reserved for future use: the subdirectory `conf.d/`.
 
@@ -73,7 +77,8 @@ requires_tunhub: ">=0.1.5"
 ```
 
 A tunhub outside the range then stops with "please upgrade" instead of
-misreading settings it does not know.
+misreading settings it does not know. tunhub 0.1.0 does not know this key
+yet and ignores it; every later release checks it.
 
 ### Addresses
 

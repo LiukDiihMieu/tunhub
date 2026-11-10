@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import ipaddress
 import logging
+import os
 import sys
 from importlib import resources
 from pathlib import Path
@@ -156,7 +157,7 @@ def cmd_service(args: argparse.Namespace) -> int:
         if args.action == "install":
             # Always record the config dir this shell uses: the service starts
             # without this shell's environment (TUNHUB_CONFIG_DIR, XDG_CONFIG_HOME).
-            config_dir = resolve_config_dir(args).resolve()
+            config_dir = Path(os.path.abspath(resolve_config_dir(args)))
             if not (config_dir / SHARED_FILE).exists():
                 print(f"tunhub: warning: no {SHARED_FILE} in {config_dir} yet (run `tunhub init`)", file=sys.stderr)
             print(autostart.install(config_dir))

@@ -17,7 +17,6 @@ you upgrade; they are listed first.
   `hub.port` are affected: set `hub: {port: 8765}` to keep the old address
   and your bookmarks, or update the bookmarks.
 - **Stricter configuration.** These used to be accepted and are now errors:
-  - `hub.listen` other than a loopback address (the dashboard has no login).
   - Service ids that are not a DNS label (letters, digits, inner hyphens, at
     most 63 characters), and host names that are not valid DNS names or IPv4
     addresses.
@@ -30,21 +29,34 @@ you upgrade; they are listed first.
 - `tunhub forget` with something other than an IP address is an error (exit
   code 2); it used to remove every line not starting with an IP address.
 
+### Security
+
+These also used to be accepted and are now errors:
+
+- `hub.listen` other than a loopback address such as `127.0.0.1` or `::1`:
+  the dashboard has no login, so it must not be reachable from other devices.
+- An ssh alias starting with `-`, which ssh would read as an option (for
+  example `-oProxyCommand=...`).
+
 ### Added
 
 - Config warnings, in the log and in a yellow box on the dashboard, for
   problems that do not stop tunhub: unknown keys (with "did you mean"), a
-  direct route to 127.0.0.1 in the shared `services.yaml`, and host names
-  outside `.localhost` that do not resolve to this machine.
+  direct route to 127.0.0.1 in the shared `services.yaml`, host names outside
+  `.localhost` that do not resolve to this machine, and IP addresses of other
+  machines as host names (the browser would bypass tunhub).
 - `requires_tunhub: ">=X.Y"` in a config names the tunhub versions it is
-  written for; an older tunhub stops with "please upgrade".
-- `null` for an optional key means "not set" (the default).
+  written for; an older tunhub stops with "please upgrade" (0.1.0 ignores
+  the key).
+- `null` for an optional key means "not set" (the default), also in
+  `tunnel.ssh_options`, where it undoes an option set in `services.yaml`.
 - `--config-dir` is also accepted before the command (`tunhub --config-dir X`).
 - Python 3.14.
 
 ### Changed
 
-- `tunhub service install` always records the config directory it used, so
+- `tunhub service install` always records the config directory it used (as
+  an absolute path; symlinks are kept, not resolved), so
   the login service no longer depends on the shell's environment (e.g.
   `XDG_CONFIG_HOME`). Run it again after upgrading if you use such a setting.
 - `tunhub service status` exits with 1 when the service is not installed.

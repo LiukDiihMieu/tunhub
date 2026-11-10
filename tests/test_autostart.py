@@ -10,7 +10,7 @@ from tunhub import autostart
 def test_run_command_uses_current_interpreter(tmp_path):
     assert autostart.run_command(None) == [sys.executable, "-m", "tunhub", "run"]
     argv = autostart.run_command(tmp_path / "cfg")
-    assert argv[-2:] == ["--config-dir", str((tmp_path / "cfg").resolve())]
+    assert argv[-2:] == ["--config-dir", str(tmp_path / "cfg")]
 
 
 def test_systemd_unit_quotes_arguments():
