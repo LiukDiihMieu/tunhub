@@ -135,6 +135,7 @@ def create_app(hub: Hub) -> FastAPI:
                     "path": str(hub.config_dir / SHARED_FILE),
                     "found": hub.config.found,
                     "init_command": init_command,
+                    "warnings": hub.warnings,
                 },
                 "services": [
                     {**runtime.snapshot(), "icon_version": hub.icons.version(runtime.service)}

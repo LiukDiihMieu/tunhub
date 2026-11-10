@@ -353,6 +353,21 @@ function renderSetup(config, empty) {
   $("setup-create").hidden = config.found;
 }
 
+/** Problems that do not stop tunhub, such as an unknown key; gone after a fixed Reload. */
+function renderWarnings(warnings) {
+  $("config-warnings").hidden = warnings.length === 0;
+  const key = warnings.join("\n");
+  if (key === renderWarnings.shown) return; // keep a text selection across polls
+  renderWarnings.shown = key;
+  $("config-warnings-list").replaceChildren(
+    ...warnings.map((text) => {
+      const item = document.createElement("li");
+      item.textContent = text;
+      return item;
+    }),
+  );
+}
+
 const copyButtons = {
   "setup-copy-path": ["setup-path", "Path copied"],
   "setup-copy-init": ["setup-init", "Command copied"],
@@ -431,6 +446,7 @@ async function poll() {
   setOffline(false);
   hubUrl = data.hub;
   renderSetup(data.config, data.services.length === 0);
+  renderWarnings(data.config.warnings);
   $("client").textContent = `on ${data.client}`;
   $("version").textContent = `tunhub ${data.version}`; // the running server's version
 

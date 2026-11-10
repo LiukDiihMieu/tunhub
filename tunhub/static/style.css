@@ -98,6 +98,9 @@ body {
   white-space: pre-wrap;
 }
 .banner.bad { border-color: var(--bad); color: var(--bad); }
+.banner.warn { border-color: var(--warn); white-space: normal; }
+.banner.warn strong { color: var(--warn); }
+.banner.warn ul { margin: 6px 0 0; padding-left: 20px; overflow-wrap: anywhere; }
 /* tunhub is not answering: the tiles show a stale state. */
 body.offline .grid { opacity: 0.45; }
 
