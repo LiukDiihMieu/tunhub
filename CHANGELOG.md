@@ -1,5 +1,56 @@
 # Changelog
 
+## Unreleased
+
+Preparing the long-term compatibility promises, now written down in
+[COMPATIBILITY.md](COMPATIBILITY.md). A few changes need action when you
+upgrade; they are listed first.
+
+### Breaking
+
+- **Per-machine overrides moved from `local.yaml` to `local.<machine>.yaml`.**
+  Each machine reads only its own file, so the whole config directory can be
+  synced. `local.yaml` is no longer read: rename it. The machine name is shown
+  next to the dashboard's title (the host name, lowercased, up to the first
+  dot; `TUNHUB_MACHINE` sets another).
+- **The default dashboard port is now 1110** (was 8765). Only configs without
+  `hub.port` are affected: set `hub: {port: 8765}` to keep the old address
+  and your bookmarks, or update the bookmarks.
+- **Stricter configuration.** These used to be accepted and are now errors:
+  - `hub.listen` other than a loopback address (the dashboard has no login).
+  - Service ids that are not a DNS label (letters, digits, inner hyphens, at
+    most 63 characters), and host names that are not valid DNS names or IPv4
+    addresses.
+  - A service host name equal to the dashboard's (e.g. a service called
+    `hub`), or two services with the same host name (IP addresses and
+    `localhost` may be shared).
+  - A route with both `direct` and `ssh` (usually a missing `-`).
+  - `true`/`false`, lists or mappings for text values (`ssh: on` used to
+    become the alias `True`).
+- `tunhub forget` with something other than an IP address is an error (exit
+  code 2); it used to remove every line not starting with an IP address.
+
+### Added
+
+- Config warnings, in the log and in a yellow box on the dashboard, for
+  problems that do not stop tunhub: unknown keys (with "did you mean"), a
+  direct route to 127.0.0.1 in the shared `services.yaml`, and host names
+  outside `.localhost` that do not resolve to this machine.
+- `requires_tunhub: ">=X.Y"` in a config names the tunhub versions it is
+  written for; an older tunhub stops with "please upgrade".
+- `null` for an optional key means "not set" (the default).
+- `--config-dir` is also accepted before the command (`tunhub --config-dir X`).
+- Python 3.14.
+
+### Changed
+
+- `tunhub service install` always records the config directory it used, so
+  the login service no longer depends on the shell's environment (e.g.
+  `XDG_CONFIG_HOME`). Run it again after upgrading if you use such a setting.
+- `tunhub service status` exits with 1 when the service is not installed.
+- Exit codes: 0 success, 1 the operation could not be done, 2 invalid
+  arguments or configuration.
+
 ## 0.1.0 — 2026-11-10
 
 First public release.
