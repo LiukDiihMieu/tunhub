@@ -17,8 +17,9 @@ The tag is not compared with the package version: check the version yourself
 - [ ] PyPI account with two-factor authentication.
 - [ ] PyPI → *Your account* → *Publishing* → *Add a new pending publisher*:
       project `tunhub`, owner `LiukDiihMieu`, repository `tunhub`, workflow
-      `release.yml`, environment `pypi`. (This also reserves the name until the
-      first upload.)
+      `release.yml`, environment `pypi`. A pending publisher does *not*
+      reserve the name: until the first upload, someone else could still take
+      it, so release soon after adding it.
 - [ ] GitHub → repository *Settings* → *Environments* → *New environment* `pypi`
       → *Required reviewers*: yourself. Optionally limit deployments to tags
       matching `v*`.
