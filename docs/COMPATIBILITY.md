@@ -39,8 +39,8 @@ tunhub uses `MAJOR.MINOR.PATCH` version numbers.
   - `local.<machine>.yaml`: optional overrides for one machine, merged on top
     of `services.yaml`.
   - `known_macs`: see below.
-- **The machine name** is `TUNHUB_MACHINE` if set, else the operating
-  system's host name (on macOS the *LocalHostName*), lowercased, up to the
+- **The machine name** is the `--machine` option if given, else
+  `TUNHUB_MACHINE` if set, else the operating system's host name (on macOS the *LocalHostName*), lowercased, up to the
   first dot: `Laptop.lan` reads `local.laptop.yaml`. The dashboard shows it
   next to its title.
 - **tunhub never modifies a file you write** (`services.yaml`,
@@ -122,7 +122,9 @@ yet and ignores it; every later release checks it.
 
 - The names: systemd user unit `tunhub.service`, launchd label
   `io.github.liukdiihmieu.tunhub`, Windows scheduled task `TunHub`.
-- An installed entry runs `<python> -m tunhub run --config-dir <dir>`, and
+- An installed entry runs `<python> -m tunhub run --config-dir <dir>`, plus
+  `--machine <name>` when a machine name was chosen at install time
+  (`--machine` or `TUNHUB_MACHINE`), and
   that command line keeps working in later versions, so upgrading tunhub does
   not require reinstalling the entry. If these names ever change,
   `tunhub service uninstall` also removes the old ones.

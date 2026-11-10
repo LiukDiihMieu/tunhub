@@ -118,7 +118,7 @@ def test_service_install_always_records_the_config_dir(monkeypatch, tmp_path):
     from tunhub import autostart
 
     seen = []
-    monkeypatch.setattr(autostart, "install", lambda config_dir: seen.append(config_dir) or "installed")
+    monkeypatch.setattr(autostart, "install", lambda config_dir, machine=None: seen.append(config_dir) or "installed")
     # The default directory, e.g. from XDG_CONFIG_HOME set in this shell only;
     # it used to be left out, and the service then read ~/.config/tunhub.
     monkeypatch.delenv("TUNHUB_CONFIG_DIR", raising=False)
@@ -137,8 +137,57 @@ def test_service_install_keeps_symlinks_in_the_config_dir(monkeypatch, tmp_path)
     except OSError:  # Windows without the symlink privilege
         pytest.skip("cannot create symlinks here")
     seen = []
-    monkeypatch.setattr(autostart, "install", lambda config_dir: seen.append(config_dir) or "installed")
+    monkeypatch.setattr(autostart, "install", lambda config_dir, machine=None: seen.append(config_dir) or "installed")
     monkeypatch.chdir(tmp_path)
     assert main(["service", "install", "--config-dir", "link"]) == 0
     assert seen == [tmp_path / "link"]
     assert autostart.run_command(Path("link"))[-1] == str(tmp_path / "link")
+
+
+# ---------------------------------------------------------------------------
+# The machine name survives `service install`
+
+
+def _install_and_start(monkeypatch, tmp_path, argv):
+    """Run `service install`, then start the recorded command the way login does:
+    without this shell's TUNHUB_MACHINE. Returns (recorded argv, local file read)."""
+    from tunhub import autostart, paths
+    from tunhub.cli import build_parser
+    from tunhub.hub import Hub
+
+    recorded = []
+    monkeypatch.setattr(
+        autostart, "install", lambda config_dir, machine=None: recorded.append(autostart.run_command(config_dir, machine)) or ""
+    )
+    monkeypatch.setattr(paths, "_os_machine_name", lambda: "Desk.lan")
+    assert main(argv + ["--config-dir", str(tmp_path)]) == 0
+
+    monkeypatch.delenv("TUNHUB_MACHINE", raising=False)  # the login session
+    args = build_parser().parse_args(recorded[0][3:])
+    return recorded[0], Hub(args.config_dir, tmp_path / "cache", machine=args.machine).config.local_path.name
+
+
+def test_service_install_records_the_machine_from_the_environment(monkeypatch, tmp_path):
+    monkeypatch.setenv("TUNHUB_MACHINE", "Travel-Laptop")
+    argv, local_file = _install_and_start(monkeypatch, tmp_path, ["service", "install"])
+    assert argv[-2:] == ["--machine", "travel-laptop"]
+    assert local_file == "local.travel-laptop.yaml"
+
+
+def test_service_install_records_the_machine_option(monkeypatch, tmp_path):
+    monkeypatch.setenv("TUNHUB_MACHINE", "ignored")
+    argv, local_file = _install_and_start(monkeypatch, tmp_path, ["service", "install", "--machine", "laptop"])
+    assert local_file == "local.laptop.yaml"
+
+
+def test_service_install_follows_the_host_name_by_default(monkeypatch, tmp_path):
+    monkeypatch.delenv("TUNHUB_MACHINE", raising=False)
+    argv, local_file = _install_and_start(monkeypatch, tmp_path, ["service", "install"])
+    assert "--machine" not in argv
+    assert local_file == "local.desk.yaml"
+
+
+def test_machine_option_comes_before_the_environment(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("TUNHUB_MACHINE", "from-env")
+    assert main(["--machine", "From-Option", "init", "--config-dir", str(tmp_path)]) == 0
+    assert "local.from-option.yaml" in capsys.readouterr().out

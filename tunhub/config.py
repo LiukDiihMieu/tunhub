@@ -19,7 +19,7 @@ import yaml
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 
 from . import __version__
-from .paths import MACHINE_ENV, machine_name
+from .paths import MACHINE_ENV, machine_name, normalize_machine_name
 
 SHARED_FILE = "services.yaml"
 # The dashboard's port when hub.port is not set (tunhub's release date, 11-10).
@@ -193,7 +193,7 @@ def load_config(config_dir: Path, machine: str | None = None) -> Config:
     raw = _read_yaml(shared_path) if found else {}
     shared_warnings = _shared_file_warnings(raw)
 
-    machine = machine_name() if machine is None else machine
+    machine = machine_name() if machine is None else normalize_machine_name(machine)
     local_path: Path | None = None
     local_found = False
     if _usable_machine_name(machine):

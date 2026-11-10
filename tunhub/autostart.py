@@ -24,12 +24,19 @@ class AutostartError(RuntimeError):
     pass
 
 
-def run_command(config_dir: Path | None) -> list[str]:
-    """The command the service runs: this interpreter, so uv/pipx tool venvs work."""
+def run_command(config_dir: Path | None, machine: str | None = None) -> list[str]:
+    """The command the service runs: this interpreter, so uv/pipx tool venvs work.
+
+    `machine` is recorded only when it was chosen explicitly: the service
+    starts without this shell's environment ($TUNHUB_MACHINE), while the
+    host name it would otherwise use is the same at login.
+    """
     argv = [sys.executable, "-m", "tunhub", "run"]
     if config_dir is not None:
         # Absolute, but symlinks kept: a dotfiles symlink may be re-pointed later.
         argv += ["--config-dir", os.path.abspath(config_dir)]
+    if machine:
+        argv += ["--machine", machine]
     return argv
 
 
@@ -124,9 +131,9 @@ def _powershell(script: str, check: bool = True) -> subprocess.CompletedProcess:
     return _run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], check)
 
 
-def install(config_dir: Path | None) -> str:
+def install(config_dir: Path | None, machine: str | None = None) -> str:
     """Install and start the autostart entry; return a human-readable summary."""
-    argv = run_command(config_dir)
+    argv = run_command(config_dir, machine)
     if sys.platform.startswith("linux"):
         unit = systemd_unit_path()
         unit.parent.mkdir(parents=True, exist_ok=True)

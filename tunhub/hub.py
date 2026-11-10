@@ -48,8 +48,11 @@ class Hub:
         mac_lookup: Callable[[str], str | None] = next_hop_mac,
         fingerprint: Callable[[], NetworkFingerprint | None] = network_fingerprint,
         resolve: Callable[[str], Awaitable[list[str]]] = resolve_host,
+        machine: str | None = None,
     ) -> None:
         self.config_dir = config_dir
+        # Picks local.<machine>.yaml; None: $TUNHUB_MACHINE or the host name.
+        self.machine = machine
         self.icons = IconStore(config_dir, cache_dir)
         self.guard = MacGuard(KnownMacs(config_dir / KNOWN_MACS_FILE), mac_lookup)
         self._fingerprint = fingerprint
@@ -62,7 +65,7 @@ class Hub:
         # Reload and shutdown replace runtimes; running two at once would leave
         # an orphaned runtime holding a port.
         self._lifecycle_lock = asyncio.Lock()
-        self.config: Config = load_config(config_dir)
+        self.config: Config = load_config(config_dir, self.machine)
         # The listening address is fixed for the process lifetime.
         self.hub_settings: HubSettings = self.config.hub
         self.runtimes: dict[str, ServiceRuntime] = {
@@ -200,7 +203,7 @@ class Hub:
             return await self._reload()
 
     async def _reload(self) -> list[str]:
-        new_config = load_config(self.config_dir)
+        new_config = load_config(self.config_dir, self.machine)
         # A missing services.yaml means "empty" only for a first start. Once a
         # file was loaded, its absence is more likely a move, a rename or an
         # editor's save in progress than a wish to drop every service.

@@ -155,6 +155,12 @@ def test_known_macs_format(tmp_path):
     assert "@revoked 192.0.2.10 aa:bb:cc:dd:ee:03" in path.read_text()
 
 
+@pytest.mark.parametrize("position", ["before", "after"])
+def test_machine_option(position):
+    argv = ["--machine", "laptop", "run"] if position == "before" else ["run", "--machine", "laptop"]
+    assert build_parser().parse_args(argv).machine == "laptop"
+
+
 # ---------------------------------------------------------------------------
 # Start at login
 
@@ -167,6 +173,10 @@ def test_login_entry_names_and_command(tmp_path):
     # That command line keeps working.
     args = build_parser().parse_args(autostart.run_command(tmp_path)[3:])
     assert args.config_dir == tmp_path
+    # An explicitly chosen machine name is recorded as well.
+    argv = autostart.run_command(tmp_path, "laptop")
+    assert argv[-2:] == ["--machine", "laptop"]
+    assert build_parser().parse_args(argv[3:]).machine == "laptop"
 
 
 # ---------------------------------------------------------------------------

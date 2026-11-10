@@ -25,14 +25,18 @@ CACHE_DIR_ENV = "TUNHUB_CACHE_DIR"
 MACHINE_ENV = "TUNHUB_MACHINE"
 
 
-def machine_name() -> str:
+def machine_name(explicit: str | None = None) -> str:
     """This machine's name, which picks its override file `local.<name>.yaml`.
 
-    $TUNHUB_MACHINE if set, else the OS host name (on macOS the LocalHostName,
-    which does not change with the network). Lowercased, and only the part
-    before the first dot: `Laptop.lan` -> `laptop`.
+    `explicit` (the --machine option) if given, else $TUNHUB_MACHINE if set,
+    else the OS host name (on macOS the LocalHostName, which does not change
+    with the network). Lowercased, and only the part before the first dot:
+    `Laptop.lan` -> `laptop`.
     """
-    name = os.environ.get(MACHINE_ENV) or _os_machine_name()
+    return normalize_machine_name(explicit or os.environ.get(MACHINE_ENV) or _os_machine_name())
+
+
+def normalize_machine_name(name: str) -> str:
     return name.strip().lower().split(".")[0]
 
 
