@@ -1,10 +1,12 @@
-# Compatibility
+# Compatibility rules
 
 tunhub runs on your computers, reads files that you write, and is reached from
-your browser's bookmarks. This page lists what you can rely on across upgrades,
-and how a change to any of it is announced.
+your browser's bookmarks. These are the rules its development follows: what
+must keep working across upgrades, and how a change to it is introduced.
 
-It applies from the first release that ships this file (see `CHANGELOG.md`).
+They are maintainer guidelines, not yet a formal promise to users; that may
+come once the design has been stable for a while. `tests/test_contract.py`
+checks the interfaces listed here.
 
 ## Versions
 
