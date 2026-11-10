@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-11-10
 
 Settling the parts that should stay stable in the long term (configuration,
 addresses, `known_macs`, the command line). A few changes need action when

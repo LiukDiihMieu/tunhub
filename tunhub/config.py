@@ -406,16 +406,16 @@ def _parse_route(item: Any, where: str, warnings: list[str]) -> Route:
 
 
 def _check_required_version(spec: Any) -> None:
-    """`requires_tunhub: ">=0.1.5"`: the tunhub versions this config is written for (PEP 440)."""
+    """`requires_tunhub: ">=0.2"`: the tunhub versions this config is written for (PEP 440)."""
     version = __version__
     if spec is None:
         return
     if not isinstance(spec, str) or not spec.strip():
-        raise ConfigError(f"requires_tunhub: expected a version range such as '>=0.1.5', got {spec!r}")
+        raise ConfigError(f"requires_tunhub: expected a version range such as '>=0.2', got {spec!r}")
     try:
         allowed = SpecifierSet(spec)
     except InvalidSpecifier:
-        raise ConfigError(f"requires_tunhub: {spec!r} is not a version range such as '>=0.1.5'") from None
+        raise ConfigError(f"requires_tunhub: {spec!r} is not a version range such as '>=0.2'") from None
     # prereleases: a development build may match too (0.1.5.dev1 matches >=0.1.5.dev0
     # and >=0.1, but not >=0.1.5, which it comes before).
     if not allowed.contains(version, prereleases=True):

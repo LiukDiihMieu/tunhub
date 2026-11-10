@@ -33,7 +33,7 @@
 
 # Optional: the tunhub versions this file is written for. An older tunhub then
 # says "please upgrade" instead of misreading newer settings.
-# requires_tunhub: ">=0.1.1"   (tunhub 0.1.0 ignores this key)
+# requires_tunhub: ">=0.2"   (tunhub 0.1.0 ignores this key)
 
 hub:
   port: 1110

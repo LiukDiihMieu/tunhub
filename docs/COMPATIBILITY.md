@@ -8,9 +8,9 @@ They are maintainer guidelines, not yet a formal promise to users; that may
 come once the design has been stable for a while. `tests/test_contract.py`
 checks the interfaces listed here.
 
-The rules apply to changes made after they were written down. The changes in
-the same changelog section (stricter configuration, `local.<machine>.yaml`,
-the default port) came just before them and ship in a 0.1.x release.
+The rules apply to changes after 0.2.0. The breaking changes in 0.2.0 itself
+(stricter configuration, `local.<machine>.yaml`, the default port) came just
+before them; the changelog lists them with migration steps.
 
 ## Versions
 
@@ -77,7 +77,7 @@ one config, a config can name the versions it is written for (a
 [PEP 440](https://peps.python.org/pep-0440/#version-specifiers) range):
 
 ```yaml
-requires_tunhub: ">=0.1.5"
+requires_tunhub: ">=0.2"
 ```
 
 A tunhub outside the range then stops with "please upgrade" instead of
