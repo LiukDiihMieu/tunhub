@@ -29,6 +29,10 @@
 #   description  shown in the dashboard
 #   enabled      false hides the service             (handy in local.yaml)
 
+# Optional: the tunhub versions this file is written for. An older tunhub then
+# says "please upgrade" instead of misreading newer settings.
+# requires_tunhub: ">=0.1.0"
+
 hub:
   port: 1110
   hostname: hub.localhost   # dashboard: http://hub.localhost:1110
