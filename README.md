@@ -13,7 +13,7 @@
 [![License: GPL v3+](https://img.shields.io/badge/license-GPL--3.0--or--later-green)](LICENSE)
 
 <p align="center">
-  <img src="docs/images/demo.gif" alt="Opening AdGuard from a browser favourite: tunhub starts the SSH tunnel by itself (the tile turns from grey to amber to purple) and the AdGuard page opens" width="764">
+  <img src="docs/images/demo.gif" alt="Opening AdGuard from a browser favourite: tunhub starts the SSH tunnel by itself (the tile turns from grey to amber to purple) and the AdGuard page opens" width="760">
   <br><sub>A plain browser favourite opens AdGuard; tunhub starts the SSH tunnel on the way.</sub>
 </p>
 
