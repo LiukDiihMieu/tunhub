@@ -2,9 +2,9 @@
 
 ## Unreleased
 
-Preparing the long-term compatibility promises, now written down in
-[COMPATIBILITY.md](COMPATIBILITY.md). A few changes need action when you
-upgrade; they are listed first.
+Settling the parts that should stay stable in the long term (configuration,
+addresses, `known_macs`, the command line). A few changes need action when
+you upgrade; they are listed first.
 
 ### Breaking
 

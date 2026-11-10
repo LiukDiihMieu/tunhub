@@ -1,8 +1,8 @@
-"""The stable interfaces promised in COMPATIBILITY.md, pinned in one place.
+"""The stable interfaces listed in docs/COMPATIBILITY.md, pinned in one place.
 
 A failure here means a change breaks users' configs, bookmarks or login
 entries. Do not just update the expected value: follow the deprecation rules
-in COMPATIBILITY.md (keep the old form working and warn), or reconsider.
+in docs/COMPATIBILITY.md (keep the old form working and warn), or reconsider.
 """
 
 import json

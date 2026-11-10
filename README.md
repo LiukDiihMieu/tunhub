@@ -320,13 +320,6 @@ not when an address is handed to another machine on the same network.
   status pages and alerts, see Uptime Kuma or Homepage.
 - **Not a config editor**: you write the YAML; tunhub never changes it.
 
-## Compatibility
-
-Config files, bookmarks (`/open/<id>`), service addresses, `known_macs` and
-the command line are stable across upgrades; changes go through a deprecation
-period. The HTTP API under `/api/` is internal to the dashboard. Details:
-[COMPATIBILITY.md](https://github.com/LiukDiihMieu/tunhub/blob/main/COMPATIBILITY.md).
-
 ## Development
 
 ```bash
@@ -335,6 +328,12 @@ uv sync --extra dev
 uv run pytest
 uv run tunhub --config-dir ./my-test-config
 ```
+
+Changes follow the compatibility rules in
+[`docs/COMPATIBILITY.md`](https://github.com/LiukDiihMieu/tunhub/blob/main/docs/COMPATIBILITY.md):
+config files, bookmarks, addresses, `known_macs` and the command line keep
+working across upgrades, while the HTTP API under `/api/` is internal to the
+dashboard.
 
 The tests use `tests/fake_ssh.py` in place of ssh to exercise the SSH routes,
 including reconnecting after the ssh process is killed.
