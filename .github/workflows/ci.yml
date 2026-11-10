@@ -6,6 +6,8 @@ on:
     paths-ignore: ["**.md", "LICENSE"]
   pull_request:
     paths-ignore: ["**.md", "LICENSE"]
+  # The release workflow runs these same tests before publishing.
+  workflow_call:
 
 # A newer push to the same branch cancels the run still in progress.
 concurrency:
