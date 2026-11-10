@@ -14,6 +14,6 @@ services:
   nas:
     autostart: true
 
-  # Change only the local port (e.g. 13000 is taken on this machine).
-  # adguard:
-  #   local_port: 23000
+  # Change only the local port (e.g. 15000 is taken on this machine).
+  # nas:
+  #   local_port: 25000

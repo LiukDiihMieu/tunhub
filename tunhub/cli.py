@@ -86,13 +86,14 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     config_dir = resolve_config_dir(args)
     if not (config_dir / SHARED_FILE).exists():
+        # Start anyway: the dashboard explains how to create the configuration.
         print(
-            f"tunhub: no {SHARED_FILE} in {config_dir}\n"
-            f"        create an example with: tunhub init"
-            + (f" --config-dir {config_dir}" if args.config_dir else ""),
+            f"tunhub: no {SHARED_FILE} in {config_dir} yet; the dashboard shows how to start\n"
+            f"        (or create an example with: tunhub init"
+            + (f" --config-dir {config_dir}" if args.config_dir else "")
+            + ")",
             file=sys.stderr,
         )
-        return 2
 
     # Imported lazily so that `tunhub init/service` stay fast.
     import uvicorn

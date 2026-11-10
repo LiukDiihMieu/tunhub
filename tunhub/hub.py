@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 from typing import Callable
 
-from .config import Config, ConfigError, HubSettings, Service, TunnelSettings, load_config
+from .config import SHARED_FILE, Config, ConfigError, HubSettings, Service, TunnelSettings, load_config
 from .icons import IconStore
 from .known_macs import FILE_NAME as KNOWN_MACS_FILE
 from .known_macs import KnownMacs, MacGuard
@@ -127,6 +127,11 @@ class Hub:
 
     async def _reload(self) -> list[str]:
         new_config = load_config(self.config_dir)
+        # A missing services.yaml means "empty" only for a first start. Once a
+        # file was loaded, its absence is more likely a move, a rename or an
+        # editor's save in progress than a wish to drop every service.
+        if self.config.found and not new_config.found:
+            raise ConfigError(f"{self.config_dir / SHARED_FILE} not found")
         # load_config() checks ports against the *new* hub port, but the
         # dashboard keeps listening on the old one until tunhub restarts.
         running_port = self.hub_settings.port

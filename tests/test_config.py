@@ -247,3 +247,11 @@ def test_empty_config_file_is_an_empty_mapping(tmp_path, file_name):
     (tmp_path / "services.yaml").write_text("services: {}\n")
     (tmp_path / file_name).write_text("# only a comment\n")
     assert load_config(tmp_path).services == {}
+
+
+def test_missing_services_yaml_is_an_empty_config(tmp_path):
+    config = load_config(tmp_path)
+    assert config.services == {} and config.found is False
+    assert config.hub.port == 8765  # defaults still apply
+    (tmp_path / "services.yaml").write_text("services: {}\n")
+    assert load_config(tmp_path).found is True

@@ -12,7 +12,8 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTex
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from .config import ConfigError
+from .config import SHARED_FILE, ConfigError
+from .paths import default_config_dir
 from .hub import Hub
 from .icons import CONTENT_TYPES
 from .service import ServiceRuntime, State
@@ -51,6 +52,10 @@ def create_app(hub: Hub) -> FastAPI:
         await hub.shutdown()
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+    # Shown on the setup card; a plain `tunhub init` only fits the default directory.
+    init_command = "tunhub init"
+    if hub.config_dir.resolve() != default_config_dir().resolve():
+        init_command += f' --config-dir "{hub.config_dir}"'
     settings = hub.hub_settings
     allowed_hosts = settings.allowed_hosts
     allowed_origins = {f"http://{host}" for host in allowed_hosts}
@@ -123,6 +128,12 @@ def create_app(hub: Hub) -> FastAPI:
             {
                 "client": socket.gethostname(),
                 "hub": f"http://{settings.hostname}:{settings.port}",
+                # Where to edit the services, and whether the file exists yet.
+                "config": {
+                    "path": str(hub.config_dir / SHARED_FILE),
+                    "found": hub.config.found,
+                    "init_command": init_command,
+                },
                 "services": [
                     {**runtime.snapshot(), "icon_version": hub.icons.version(runtime.service)}
                     for runtime in hub.runtimes.values()

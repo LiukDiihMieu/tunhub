@@ -95,6 +95,37 @@ body {
 }
 .banner.bad { border-color: var(--bad); color: var(--bad); }
 
+/* First start: a centred guide on the page background, not a card. */
+.setup { max-width: 760px; margin: 56px auto 48px; padding: 0 24px; }
+.setup h2 { margin: 0 0 6px; font-size: 22px; }
+.setup p { margin: 0 0 10px; }
+#setup-lead { margin-bottom: 28px; }
+.setup-field { margin-bottom: 20px; }
+.setup-label { margin-bottom: 6px; font-size: 12px; color: var(--muted); }
+.setup-value {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--code-bg);
+}
+.setup-value code { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 13px; line-height: 1.5; }
+.setup-value .icon-btn { flex: none; }
+.code-block { margin: 0 0 24px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.code-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px 6px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+}
+.code-block pre { margin: 0; padding: 18px 20px; background: var(--code-bg); font-size: 13px; line-height: 1.6; overflow-x: auto; }
+.setup-reload { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+
 /* ------------------------------------------------------------------ tiles */
 
 .grid {
@@ -103,6 +134,7 @@ body {
   gap: 16px;
   padding: 24px;
 }
+.grid:empty { display: none; } /* no services: let the setup card sit at the top */
 
 .tile {
   position: relative;
