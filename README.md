@@ -179,8 +179,8 @@ To use another directory, set `TUNHUB_CONFIG_DIR` or pass `--config-dir`.
 - **`local.<machine>.yaml`** holds optional overrides for one machine and is
   merged on top of `services.yaml`: mappings key by key, lists such as
   `routes` as a whole. `<machine>` is the name shown next to the dashboard's
-  title (the host name, lowercased, up to the first dot; `TUNHUB_MACHINE`
-  sets another). Each machine reads only its own file. See
+  title (the host name, lowercased, up to the first dot; `TUNHUB_MACHINE` or
+  `--machine` sets another). Each machine reads only its own file. See
   `local.example.yaml`.
 
 Write the routes as "how to reach this service from my other computers":
@@ -227,8 +227,9 @@ tunhub service install     # also: uninstall, status
 | Windows | Task Scheduler (`pythonw`, no console window) | `%LOCALAPPDATA%\tunhub\tunhub.log` |
 
 The service runs the same Python interpreter that installed it, with the
-config directory that `tunhub service install` used (written into the
-service, so it does not depend on your shell's environment). After moving the
+config directory that `tunhub service install` used, and the machine name if
+you chose one (`TUNHUB_MACHINE` or `--machine`). Both are written into the
+service, so it does not depend on your shell's environment. After moving the
 config directory, run `tunhub service install` again.
 
 This starts *tunhub* at login. A service's `autostart: true` is different: it

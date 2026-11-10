@@ -20,7 +20,7 @@ from .config import DEFAULT_HUB_PORT, LOCAL_FILE, SHARED_FILE, ConfigError, loca
 from .known_macs import FILE_NAME as KNOWN_MACS_FILE
 from .known_macs import KnownMacs
 from .winjob import kill_children_on_exit
-from .paths import CONFIG_DIR_ENV, default_config_dir, default_log_file, machine_name
+from .paths import CONFIG_DIR_ENV, MACHINE_ENV, default_config_dir, default_log_file, machine_name
 
 TEMPLATES = ("services.yaml", "local.example.yaml")
 
@@ -43,13 +43,16 @@ def build_parser() -> argparse.ArgumentParser:
         f"(default: ${CONFIG_DIR_ENV} or {default_config_dir()})"
     )
     # Also accepted before the command: `tunhub --config-dir X` (run is the default).
+    machine_help = f"this machine's name, which picks local.<machine>.yaml (default: ${MACHINE_ENV} or the host name)"
     parser.add_argument("--config-dir", type=Path, help=config_help)
-    parser.set_defaults(handler=cmd_run, config_dir=None, log_file=None)
+    parser.add_argument("--machine", help=machine_help)
+    parser.set_defaults(handler=cmd_run, config_dir=None, machine=None, log_file=None)
 
     config_option = argparse.ArgumentParser(add_help=False)
     # SUPPRESS: without the option, a subcommand must not overwrite a value
     # given before the command (`tunhub --config-dir X run`).
     config_option.add_argument("--config-dir", type=Path, default=argparse.SUPPRESS, help=config_help)
+    config_option.add_argument("--machine", default=argparse.SUPPRESS, help=machine_help)
 
     commands = parser.add_subparsers(title="commands", metavar="COMMAND")
 
@@ -112,7 +115,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     try:
-        hub = Hub(config_dir)
+        hub = Hub(config_dir, machine=args.machine)
     except ConfigError as exc:
         print(f"tunhub: config error: {exc}", file=sys.stderr)
         return 2
@@ -145,7 +148,7 @@ def cmd_init(args: argparse.Namespace) -> int:
 
     print(f"created {target}")
     print(f"created {config_dir / 'local.example.yaml'}")
-    print(f"this machine's overrides go in {local_file_name(machine_name())} (see local.example.yaml)")
+    print(f"this machine's overrides go in {local_file_name(machine_name(args.machine))} (see local.example.yaml)")
     print(f"next: edit the example services, then run `tunhub` and open http://hub.localhost:{DEFAULT_HUB_PORT}")
     return 0
 
@@ -160,7 +163,10 @@ def cmd_service(args: argparse.Namespace) -> int:
             config_dir = Path(os.path.abspath(resolve_config_dir(args)))
             if not (config_dir / SHARED_FILE).exists():
                 print(f"tunhub: warning: no {SHARED_FILE} in {config_dir} yet (run `tunhub init`)", file=sys.stderr)
-            print(autostart.install(config_dir))
+            # A machine name chosen here (--machine, $TUNHUB_MACHINE) is recorded
+            # too; otherwise the service follows the host name, as this shell does.
+            chosen = args.machine or os.environ.get(MACHINE_ENV)
+            print(autostart.install(config_dir, machine_name(chosen) if chosen else None))
         elif args.action == "uninstall":
             print(autostart.uninstall())
         else:

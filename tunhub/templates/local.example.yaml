@@ -1,7 +1,7 @@
 # Overrides for ONE machine. Copy this file to local.<machine>.yaml, where
 # <machine> is the name the dashboard shows next to its title (this machine's
-# host name, lowercased, up to the first dot; set TUNHUB_MACHINE to choose
-# another). Each machine reads only its own file, so the whole config
+# host name, lowercased, up to the first dot; set TUNHUB_MACHINE or pass
+# --machine to choose another). Each machine reads only its own file, so the whole config
 # directory can be synced between machines.
 #
 # The file is merged on top of services.yaml: mappings key by key, while lists

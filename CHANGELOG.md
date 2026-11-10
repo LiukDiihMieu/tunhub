@@ -12,7 +12,8 @@ you upgrade; they are listed first.
   Each machine reads only its own file, so the whole config directory can be
   synced. `local.yaml` is no longer read: rename it. The machine name is shown
   next to the dashboard's title (the host name, lowercased, up to the first
-  dot; `TUNHUB_MACHINE` sets another).
+  dot; `TUNHUB_MACHINE` or `--machine` sets another, and `tunhub service
+  install` records it).
 - **The default dashboard port is now 1110** (was 8765). Only configs without
   `hub.port` are affected: set `hub: {port: 8765}` to keep the old address
   and your bookmarks, or update the bookmarks.
