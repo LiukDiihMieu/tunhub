@@ -1,6 +1,9 @@
 """Relay and service runtime tests, using local servers and a fake ssh binary."""
 
 import asyncio
+import socket
+
+import pytest
 
 from tunhub.net import TcpRelay
 from tunhub.service import ServiceRuntime, State
@@ -193,3 +196,21 @@ def test_teardown_waits_until_port_is_released():
         await runtime.stop()
 
     run(scenario())
+
+
+def test_direct_probe_uses_ipv4_only():
+    # A host name must not reach an IPv6 address: known_macs cannot check it.
+    from tunhub.net import probe_tcp
+
+    try:
+        v6 = socket.create_server(("::1", 0), family=socket.AF_INET6)
+    except OSError:
+        pytest.skip("no IPv6 loopback here")
+    v4 = socket.create_server(("127.0.0.1", 0))
+    try:
+        with pytest.raises(OSError):
+            asyncio.run(probe_tcp("::1", v6.getsockname()[1], 2))
+        assert asyncio.run(probe_tcp("localhost", v4.getsockname()[1], 2)) == "127.0.0.1"
+    finally:
+        v6.close()
+        v4.close()

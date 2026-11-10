@@ -53,8 +53,12 @@ tunhub uses `MAJOR.MINOR.PATCH` version numbers.
 ### Configuration
 
 - Every key documented in the example `services.yaml`, with its meaning, its
-  value format (`host:port`, `[v6]:port`, a bare port for `remote`) and the
+  value format (`host:port`; `[v6]:port` and a bare port for `remote`) and the
   values it accepts.
+- IP versions: `direct` routes reach IPv4 addresses only (a host name is
+  resolved to IPv4), because `known_macs` checks IPv4 next hops. `ssh` routes
+  pass `remote` to ssh, IPv4 or IPv6. Supporting IPv6 for `direct` later
+  would be an addition, not a break.
 - How the local file is merged: mappings key by key; every other value, lists
   such as `routes` included, replaces the one in `services.yaml`.
 - `null` means "not set": the default applies.

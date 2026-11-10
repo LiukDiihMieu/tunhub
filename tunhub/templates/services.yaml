@@ -10,10 +10,11 @@
 # and TCP services (RDP, VNC, databases, ...) are reached at 127.0.0.1:<local_port>.
 #
 # `routes` are tried in order; the first one that works is used:
-#   - direct: host:port            -> local TCP relay to host:port (e.g. on your LAN)
+#   - direct: host:port            -> local TCP relay to host:port (e.g. on your LAN);
+#                                     IPv4 only (an IPv6 target needs an ssh route)
 #   - ssh: <Host alias from ~/.ssh/config>
 #     remote: host:port            -> ssh -L; host:port as seen from the SSH server
-#                                     (a bare port means 127.0.0.1:<port>)
+#                                     (a bare port means 127.0.0.1:<port>; IPv6 as [::1]:<port>)
 #
 # Per-service keys (only local_port and routes are required):
 #   name         display name                      (default: the id)

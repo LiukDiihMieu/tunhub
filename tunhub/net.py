@@ -105,11 +105,14 @@ async def _pipe(reader: asyncio.StreamReader, writer: asyncio.StreamWriter, abor
 
 
 async def probe_tcp(host: str, port: int, timeout: float) -> str:
-    """Open and close a TCP connection; return the peer IP it reached.
+    """Open and close an IPv4 TCP connection; return the peer IP it reached.
 
+    IPv4 only: direct routes are checked against known_macs, which can only
+    look up IPv4 next hops. A host name therefore resolves to IPv4 addresses.
     Raises OSError/TimeoutError if the connection cannot be opened.
     """
-    _, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout)
+    connect = asyncio.open_connection(host, port, family=socket.AF_INET)
+    _, writer = await asyncio.wait_for(connect, timeout)
     peer_ip = writer.get_extra_info("peername")[0]
     writer.close()
     return peer_ip

@@ -381,6 +381,12 @@ def _parse_route(item: Any, where: str, warnings: list[str]) -> Route:
     if "direct" in item:
         _warn_unknown_keys(item, DIRECT_ROUTE_KEYS, f"{where} (direct)", warnings)
         host, port = parse_endpoint(item["direct"], where)
+        if ":" in host:
+            # known_macs can only check IPv4 targets (ARP) on every platform.
+            raise ConfigError(
+                f"{where}: direct routes support IPv4 addresses and host names only; "
+                "reach an IPv6 target through an ssh route"
+            )
         return Route(kind="direct", target_host=host, target_port=port, label=label)
 
     if "ssh" in item:

@@ -237,6 +237,16 @@ def test_endpoint_formats():
     assert parse_endpoint(5000, "t", default_host="127.0.0.1") == ("127.0.0.1", 5000)  # bare port for `remote`
 
 
+def test_ip_versions_of_routes():
+    from tunhub.config import ConfigError
+
+    ssh = {"local_port": 15000, "routes": [{"ssh": "x", "remote": "[2001:db8::1]:5000"}]}
+    assert parse_config({"services": {"a": ssh}}).services["a"].routes[0].target_host == "2001:db8::1"
+    direct = {"local_port": 15000, "routes": [{"direct": "[2001:db8::1]:5000"}]}
+    with pytest.raises(ConfigError):
+        parse_config({"services": {"a": direct}})
+
+
 def test_required_version_not_met_is_an_error():
     from tunhub.config import ConfigError
 

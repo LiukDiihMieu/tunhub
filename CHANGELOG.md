@@ -27,6 +27,10 @@ you upgrade; they are listed first.
   - A route with both `direct` and `ssh` (usually a missing `-`).
   - `true`/`false`, lists or mappings for text values (`ssh: on` used to
     become the alias `True`).
+- `direct` routes are IPv4 only: an IPv6 address is an error, and a host name
+  is resolved to IPv4 addresses. On macOS and Windows, `known_macs` could not
+  check IPv6 targets and silently let them through. Reach IPv6 targets
+  through an `ssh` route (`remote: "[2001:db8::1]:5000"`).
 - `tunhub forget` with something other than an IP address is an error (exit
   code 2); it used to remove every line not starting with an IP address.
 
