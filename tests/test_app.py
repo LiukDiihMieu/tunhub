@@ -194,7 +194,7 @@ def test_open_rejects_requests_from_other_pages(setup, headers, allowed):
         assert response.status_code == 302
     else:
         assert response.status_code == 403
-        assert hub.get("web").mode is not Mode.MANUAL  # the request started nothing
+        assert hub.get("web").mode is not Mode.ON  # the request started nothing
 
 
 def test_dashboard_starts_without_config_and_picks_it_up_on_reload(tmp_path):

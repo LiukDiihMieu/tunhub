@@ -60,7 +60,7 @@ def test_comes_up_automatically_and_goes_idle_without_ssh():
     run(scenario())
 
 
-def test_stop_ends_a_manual_ssh_connection_and_returns_to_auto():
+def test_stop_ends_an_on_ssh_connection_and_returns_to_auto():
     async def scenario():
         _, ssh_target = await start_echo_server()
         dead = free_port()  # direct route unreachable, like away from home
@@ -68,7 +68,7 @@ def test_stop_ends_a_manual_ssh_connection_and_returns_to_auto():
                                auto_direct_interval=30)
         runtime.activate()
         assert await runtime.ensure_up(10)  # opened while off: kept up via ssh
-        assert runtime.mode is Mode.MANUAL and runtime.active_route == 1
+        assert runtime.mode is Mode.ON and runtime.active_route == 1
 
         # Back home: the direct target answers now. Stop goes back to auto and
         # probes at once (not after auto_direct_interval).
@@ -85,7 +85,7 @@ def test_stop_ends_a_manual_ssh_connection_and_returns_to_auto():
 
 def test_open_keeps_a_direct_auto_service_in_auto():
     # Opening a service that auto-direct already has up must not turn it into
-    # a manual one: a laptop leaving home would then fall back to ssh.
+    # an "on" one: a laptop leaving home would then fall back to ssh.
     async def scenario():
         server, target = await start_echo_server()
         _, ssh_target = await start_echo_server()
@@ -110,7 +110,7 @@ def test_open_while_off_keeps_it_up_with_ssh_fallback():
         runtime = make_runtime([{"direct": f"127.0.0.1:{free_port()}"}, {"ssh": "lab", "remote": ssh_target}])
         runtime.activate()
         assert await runtime.ensure_up(10)
-        assert runtime.mode is Mode.MANUAL and runtime.active_route == 1
+        assert runtime.mode is Mode.ON and runtime.active_route == 1
         await runtime.close()
 
     run(scenario())
@@ -180,7 +180,7 @@ services:
     run(scenario())
 
 
-def test_manual_open_that_lands_on_direct_settles_in_auto():
+def test_opening_that_lands_on_direct_settles_in_auto():
     # E.g. arriving home and clicking before the next auto-direct probe.
     async def scenario():
         _, target = await start_echo_server()
@@ -195,7 +195,7 @@ def test_manual_open_that_lands_on_direct_settles_in_auto():
     run(scenario())
 
 
-def test_without_auto_direct_a_direct_connection_stays_manual():
+def test_without_auto_direct_a_direct_connection_stays_on():
     async def scenario():
         _, target = await start_echo_server()
         config = make_config({"svc": {"type": "tcp", "local_port": free_port(), "auto_direct": False,
@@ -203,7 +203,7 @@ def test_without_auto_direct_a_direct_connection_stays_manual():
         runtime = ServiceRuntime(config.services["svc"], config.tunnel)
         runtime.activate()  # no-op: auto-direct is off
         assert await runtime.ensure_up(5)
-        assert runtime.mode is Mode.MANUAL  # it has no auto mode to settle in
+        assert runtime.mode is Mode.ON  # it has no auto mode to settle in
         await runtime.close()
 
     run(scenario())
@@ -211,7 +211,7 @@ def test_without_auto_direct_a_direct_connection_stays_manual():
 
 def test_ssh_that_dies_at_home_reconnects_direct_and_settles_in_auto():
     # The laptop comes home: its ssh connection dies with the old network, the
-    # manual reconnect tries the direct route first, and that settles in auto.
+    # reconnect tries the direct route first, and that settles in auto.
     async def scenario():
         _, ssh_target = await start_echo_server()
         home = free_port()
@@ -219,7 +219,7 @@ def test_ssh_that_dies_at_home_reconnects_direct_and_settles_in_auto():
                                auto_direct_interval=30)
         runtime.activate()
         assert await runtime.ensure_up(10)
-        assert runtime.mode is Mode.MANUAL and runtime.active_route == 1
+        assert runtime.mode is Mode.ON and runtime.active_route == 1
 
         server, _ = await start_echo_server(home)  # the direct target is reachable now
         runtime._ssh._proc.kill()  # the old network is gone
