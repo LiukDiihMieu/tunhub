@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTex
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from . import __version__
 from .config import SHARED_FILE, ConfigError
 from .paths import default_config_dir
 from .hub import Hub
@@ -127,6 +128,7 @@ def create_app(hub: Hub) -> FastAPI:
         return JSONResponse(
             {
                 "client": socket.gethostname(),
+                "version": __version__,
                 "hub": f"http://{settings.hostname}:{settings.port}",
                 # Where to edit the services, and whether the file exists yet.
                 "config": {

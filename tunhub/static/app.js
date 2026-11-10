@@ -432,6 +432,7 @@ async function poll() {
   hubUrl = data.hub;
   renderSetup(data.config, data.services.length === 0);
   $("client").textContent = `on ${data.client}`;
+  $("version").textContent = `tunhub ${data.version}`; // the running server's version
 
   const seen = new Set();
   data.services.forEach((service, position) => {
