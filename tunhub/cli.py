@@ -2,7 +2,9 @@
 
 Exit codes (part of the compatibility policy): 0 success; 1 the operation
 could not be done (e.g. a file could not be written, autostart failed, the
-autostart entry is not installed); 2 invalid arguments or configuration.
+autostart entry is not installed); 2 invalid arguments, or a configuration
+that leaves `tunhub run` nowhere to listen (other configuration errors are
+shown on the dashboard).
 """
 
 from __future__ import annotations
