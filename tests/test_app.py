@@ -410,3 +410,24 @@ def test_saving_the_order_needs_the_custom_header(tmp_path):
     with _ordered_setup(tmp_path) as client:
         assert client.post("/api/order", json={"order": ["c"]}).status_code == 403
         assert _ids(client) == (["a", "b", "c"], False)
+
+
+def test_unreadable_file_at_startup_still_starts_on_the_remembered_address(tmp_path):
+    port = free_port()
+    (tmp_path / "services.yaml").write_text(f"hub: {{port: {port}}}\n")
+    Hub(tmp_path)  # remembers where the dashboard listens
+    (tmp_path / "services.yaml").unlink()
+    (tmp_path / "services.yaml").mkdir()
+    hub = Hub(tmp_path)
+    assert hub.hub_settings.port == port
+    assert "cannot read the file" in hub.config_error
+
+
+def test_reload_of_a_non_utf8_file_shows_the_error(setup):
+    client, hub, _, _ = setup
+    (hub.config_dir / "services.yaml").write_bytes(b"services:\n  caf\xe9: {}\n")
+    response = client.post("/api/reload", headers={"X-Tunhub": "1"})
+    assert response.status_code == 400 and "not UTF-8" in response.json()["error"]
+    config = client.get("/api/state").json()["config"]
+    assert "not UTF-8" in config["error"] and config["error_keeps_previous"] is True
+    assert hub.get("web") is not None

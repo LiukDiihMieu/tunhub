@@ -574,3 +574,27 @@ def test_direct_route_to_ipv6_is_rejected(target):
 def test_ssh_route_to_ipv6_is_fine():
     route = {"ssh": "nas", "remote": "[2001:db8::1]:5000"}
     assert parse_config({"services": {"dsm": _service(routes=[route])}}).services["dsm"].routes[0].target_host == "2001:db8::1"
+
+
+# ---------------------------------------------------------------------------
+# Files that cannot be read at all
+
+
+@pytest.mark.parametrize("file_name", ["services.yaml", "local.testbox.yaml"])
+def test_a_directory_instead_of_a_file_is_a_config_error(tmp_path, file_name):
+    (tmp_path / "services.yaml").write_text("services: {}\n")
+    if file_name != "services.yaml":
+        (tmp_path / file_name).mkdir()
+    else:
+        (tmp_path / file_name).unlink()
+        (tmp_path / file_name).mkdir()
+    with pytest.raises(ConfigError, match=f"{file_name}: cannot read the file"):
+        load_config(tmp_path)
+
+
+@pytest.mark.parametrize("file_name", ["services.yaml", "local.testbox.yaml"])
+def test_text_that_is_not_utf8_is_a_config_error(tmp_path, file_name):
+    (tmp_path / "services.yaml").write_text("services: {}\n")
+    (tmp_path / file_name).write_bytes(b"services:\n  caf\xe9: {}\n")  # Latin-1, not UTF-8
+    with pytest.raises(ConfigError, match=f"{file_name}: not UTF-8 text"):
+        load_config(tmp_path)
