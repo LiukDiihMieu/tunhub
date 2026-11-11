@@ -80,7 +80,8 @@ one config, a config can name the versions it is written for (a
 requires_tunhub: ">=0.2"
 ```
 
-A tunhub outside the range then stops with "please upgrade" instead of
+A tunhub outside the range then shows "please upgrade" on the dashboard (and
+loads no services) instead of
 misreading settings it does not know. tunhub 0.1.0 does not know this key
 yet and ignores it; every later release checks it.
 
@@ -165,7 +166,12 @@ yet and ignores it; every later release checks it.
 
 ## Deprecation
 
-When a stable interface has to change:
+Making tunhub more tolerant is not a break: accepting a value it used to
+reject, or keeping running where it used to stop (for example, showing a
+config error on the dashboard instead of exiting with code 2). Such changes
+need no deprecation period; the changelog lists them under **Changed**.
+
+When a stable interface has to change in a way that can break a setup:
 
 1. A release announces it. The old form still works, and tunhub warns where
    you will see it (a config warning on the dashboard, or the terminal for

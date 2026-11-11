@@ -242,6 +242,15 @@ connects that service whenever tunhub starts.
 On Linux, the systemd user session must see your ssh-agent (`SSH_AUTH_SOCK`);
 GNOME's agent normally takes care of that.
 
+After upgrading, restart tunhub: until then the old version keeps running,
+while the dashboard already loads the new version's page.
+
+```bash
+uv tool upgrade tunhub
+systemctl --user restart tunhub                                    # Linux
+launchctl kickstart -k gui/$(id -u)/io.github.liukdiihmieu.tunhub  # macOS
+```
+
 On Windows, stop tunhub before upgrading it, because Windows cannot replace a
 program that is running (`uv` then fails with "Access is denied"):
 

@@ -9,7 +9,8 @@
   file is fixed (bookmarks show it too). tunhub listens where the `hub:`
   section says, or, if the files cannot be read at all, where the last
   working configuration did. `tunhub run` exits with code 2 only when
-  neither is known.
+  neither is known. (Being more tolerant is not a breaking change; this is
+  now written in `docs/COMPATIBILITY.md`.)
 - The config error and warning boxes have their own *Reload config* button.
 - The top bar keeps only *Disconnect SSH*; *Reload config* moved into a new
   **⋯** menu, which also offers *Copy config path*, *Events* and *Restore
