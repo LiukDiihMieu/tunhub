@@ -278,6 +278,12 @@ Start-ScheduledTask -TaskName TunHub
   never contacts other sites. They are served with a sandboxing CSP and shown
   only as `<img>`.
 
+**Use tunhub on a computer only you log in to.** Listening on this machine
+only keeps other computers out, not other user accounts on the same
+computer: on a shared machine (a lab server, a multi-user workstation),
+anyone logged in can open the dashboard and every forwarded port, and can
+make tunhub open tunnels with your ssh keys.
+
 ### Direct routes on other networks: `known_macs`
 
 Private addresses are reused everywhere. In a café whose network also uses
