@@ -551,8 +551,15 @@ def _check_port_conflicts(hub: HubSettings, services: dict[str, Service]) -> Non
 
 
 def _read_yaml(path: Path) -> dict[str, Any]:
+    """Every way a config file can be unusable is a ConfigError naming the file."""
     try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise ConfigError(f"{path}: not UTF-8 text (invalid byte at position {exc.start})") from exc
+    except OSError as exc:  # a directory, no permission, ...
+        raise ConfigError(f"{path}: cannot read the file ({exc.strerror or exc})") from exc
+    try:
+        data = yaml.safe_load(text)
     except yaml.YAMLError as exc:
         raise ConfigError(f"{path}: invalid YAML: {exc}") from exc
     return _mapping(data, f"{path}: top level")  # an empty file is an empty mapping
