@@ -155,6 +155,8 @@ A service is either in **auto** (the default) or **on**:
 - After a network change, ssh notices its dead connection within about 45 s
   (keep-alive). To switch immediately, click Stop and then the tile.
 
+Drag a tile onto another one to rearrange them; the order is remembered on
+this machine, and *Restore card order* in the top-right **⋯** menu undoes it.
 The **⋯** button on a tile shows its address, bookmark URL, route choice and live log:
 
 <p align="center">

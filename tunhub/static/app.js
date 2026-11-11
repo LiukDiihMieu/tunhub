@@ -12,6 +12,7 @@ const $ = (id) => document.getElementById(id);
 const eventsPanel = $("events");
 
 let hubUrl = location.origin;
+let dragging = null; // the tile element being dragged to a new place
 let configDir = "";
 let drawerId = null; // service shown in the drawer
 let drawerIconKey = null;
@@ -115,6 +116,7 @@ function renderIcon(iconEl, service) {
   }
   const img = document.createElement("img");
   img.alt = "";
+  img.draggable = false; // dragging a card moves the card, not its image
   img.src = `/api/icons/${service.id}?v=${service.icon_version}`;
   img.onerror = () => renderLetters(iconEl, service);
   iconEl.classList.remove("letters");
@@ -156,9 +158,66 @@ function createTile(service) {
     else openDrawer(tile.service.id, event.currentTarget);
   });
 
+  enableDrag(el, launch);
   tiles.set(service.id, tile);
   return tile;
 }
+
+// ------------------------------------------------------------ card order
+
+// Drag a card onto another one to move it there. The cards move while
+// dragging; dropping saves the order (in tunhub's state, per machine).
+let orderBeforeDrag = "";
+
+function cardOrder() {
+  return [...container.children].map((el) => el.id);
+}
+
+function enableDrag(el, launch) {
+  el.draggable = true;
+  launch.draggable = false; // drag the card, not the link inside it
+  el.addEventListener("dragstart", (event) => {
+    dragging = el;
+    orderBeforeDrag = cardOrder().join("\n");
+    el.classList.add("dragging");
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", el.id); // Firefox starts a drag only with data
+  });
+  el.addEventListener("dragend", async (event) => {
+    el.classList.remove("dragging");
+    dragging = null;
+    const order = cardOrder();
+    // Cancelled (Esc, or dropped outside the cards): poll() puts the cards back.
+    if (event.dataTransfer.dropEffect !== "none" && order.join("\n") !== orderBeforeDrag) {
+      try { await api("/api/order", { order }); } catch (err) { showBanner(err.message, true); }
+    }
+    poll();
+  });
+}
+
+container.addEventListener("dragover", (event) => {
+  if (!dragging) return;
+  event.preventDefault(); // allow dropping here
+  event.dataTransfer.dropEffect = "move";
+  const target = event.target.closest(".tile");
+  if (!target || target === dragging) return;
+  // Before or after the card under the pointer, by which half it is on.
+  const box = target.getBoundingClientRect();
+  const after = event.clientX > box.left + box.width / 2;
+  const reference = after ? target.nextElementSibling : target;
+  if (reference !== dragging && dragging.nextElementSibling !== reference) {
+    container.insertBefore(dragging, reference);
+  }
+});
+container.addEventListener("drop", (event) => {
+  if (dragging) event.preventDefault();
+});
+
+$("m-restore-order").addEventListener("click", async () => {
+  try { await api("/api/order", { order: null }); } catch (err) { showBanner(err.message, true); }
+  toast("Card order restored");
+  poll();
+});
 
 function updateTile(tile, service) {
   tile.service = service;
@@ -469,6 +528,7 @@ async function poll() {
   hubUrl = data.hub;
   renderSetup(data.config, data.services.length === 0);
   renderConfigError(data.config);
+  $("m-restore-order").disabled = !data.custom_order;
   renderWarnings(data.config.warnings);
   $("machine").textContent = `on ${data.machine}`;
   $("machine").title = `This machine's overrides: local.${data.machine}.yaml`;
@@ -479,7 +539,7 @@ async function poll() {
     seen.add(service.id);
     const tile = tiles.get(service.id) || createTile(service);
     updateTile(tile, service);
-    if (container.children[position] !== tile.el) {
+    if (!dragging && container.children[position] !== tile.el) {
       container.insertBefore(tile.el, container.children[position] || null);
     }
   });
@@ -542,7 +602,7 @@ document.addEventListener("click", (event) => {
   if (!menu.hidden && !event.target.closest(".menu-wrap")) setMenuOpen(false);
 });
 menu.addEventListener("keydown", (event) => {
-  const items = [...menu.querySelectorAll("button")];
+  const items = [...menu.querySelectorAll("button:not(:disabled)")];
   const index = items.indexOf(document.activeElement);
   if (event.key === "ArrowDown" || event.key === "ArrowUp") {
     event.preventDefault();
