@@ -214,3 +214,35 @@ def test_direct_probe_uses_ipv4_only():
     finally:
         v6.close()
         v4.close()
+
+
+def test_late_error_of_a_stopped_relay_leaves_the_new_route_alone():
+    # A relay waits up to connect_timeout for each connection it forwards. If
+    # the direct route is replaced meanwhile (here by ssh), that attempt can
+    # still fail afterwards; it must not take down the route now in use.
+    async def scenario():
+        direct, direct_port = await start_echo_server()
+        _, ssh_target = await start_echo_server()
+        runtime = make_runtime(
+            {"type": "tcp", "local_port": free_port(),
+             "routes": [{"direct": f"127.0.0.1:{direct_port}"}, {"ssh": "lab", "remote": ssh_target}]},
+            auto_direct=False,
+        )
+        runtime.start()
+        await wait_until(lambda: runtime.state is State.UP and runtime.active_route == 0, runtime=runtime)
+        old_relay = runtime._relay
+
+        # The direct target goes away; the next forwarded connection notices it.
+        direct.close()
+        await direct.wait_closed()
+        _, writer = await asyncio.open_connection("127.0.0.1", runtime.service.local_port)
+        writer.close()
+        await wait_until(lambda: runtime.state is State.UP and runtime.active_route == 1, runtime=runtime)
+
+        old_relay._on_connect_error(OSError(113, "No route to host"))  # the late error
+        await asyncio.sleep(0.5)
+        assert runtime.state is State.UP and runtime.active_route == 1
+        assert await roundtrip(runtime.service.local_port, b"still via ssh") == b"still via ssh"
+        await runtime.stop()
+
+    run(scenario())
