@@ -358,3 +358,55 @@ def test_unreadable_files_without_a_remembered_address_cannot_start(tmp_path):
     (tmp_path / "services.yaml").write_text("hub: {port: [\n")
     with pytest.raises(ConfigError):
         Hub(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# Card order
+
+
+def _ordered_setup(tmp_path, ids=("a", "b", "c")):
+    port = free_port()
+    services = "".join(f"  {i}: {{local_port: {free_port()}, routes: [{{ssh: x, remote: 1}}]}}\n" for i in ids)
+    (tmp_path / "services.yaml").write_text(f"hub: {{port: {port}}}\nservices:\n{services}")
+    return TestClient(create_app(Hub(tmp_path)), base_url=f"http://hub.localhost:{port}")
+
+
+def _ids(client):
+    state = client.get("/api/state").json()
+    return [s["id"] for s in state["services"]], state["custom_order"]
+
+
+def test_cards_follow_the_saved_order_and_survive_a_restart(tmp_path):
+    with _ordered_setup(tmp_path) as client:
+        assert _ids(client) == (["a", "b", "c"], False)
+        assert client.post("/api/order", json={"order": ["c", "a"]}, headers={"X-Tunhub": "1"}).status_code == 200
+        assert _ids(client) == (["c", "a", "b"], True)  # unarranged ones keep the config order, after
+
+    with _ordered_setup(tmp_path) as client:  # same config dir: the order is remembered
+        assert _ids(client) == (["c", "a", "b"], True)
+        client.post("/api/order", json={"order": None}, headers={"X-Tunhub": "1"})
+        assert _ids(client) == (["a", "b", "c"], False)
+
+
+def test_unknown_and_duplicate_ids_are_ignored(tmp_path):
+    with _ordered_setup(tmp_path) as client:
+        client.post("/api/order", json={"order": ["b", "zzz", "b", "a"]}, headers={"X-Tunhub": "1"})
+        assert _ids(client) == (["b", "a", "c"], True)
+
+
+def test_removed_services_drop_out_of_the_order(tmp_path):
+    with _ordered_setup(tmp_path) as client:
+        client.post("/api/order", json={"order": ["c", "b", "a"]}, headers={"X-Tunhub": "1"})
+        text = (tmp_path / "services.yaml").read_text()
+        (tmp_path / "services.yaml").write_text("\n".join(l for l in text.splitlines() if not l.startswith("  b:")) + "\n")
+        assert client.post("/api/reload", headers={"X-Tunhub": "1"}).status_code == 200
+        assert _ids(client) == (["c", "a"], True)
+    from tunhub.state import StateStore
+
+    assert StateStore(tmp_path).get("order") == ["c", "a"]
+
+
+def test_saving_the_order_needs_the_custom_header(tmp_path):
+    with _ordered_setup(tmp_path) as client:
+        assert client.post("/api/order", json={"order": ["c"]}).status_code == 403
+        assert _ids(client) == (["a", "b", "c"], False)

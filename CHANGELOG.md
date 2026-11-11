@@ -12,13 +12,17 @@
   neither is known.
 - The config error and warning boxes have their own *Reload config* button.
 - The top bar keeps only *Disconnect SSH*; *Reload config* moved into a new
-  **⋯** menu, which also offers *Copy config path* and *Events*.
+  **⋯** menu, which also offers *Copy config path*, *Events* and *Restore
+  card order*.
 
 ### Added
 
 - **Events** panel (⋯ menu): the recent events of tunhub as a whole, such as
   network changes, reloads, config warnings and errors, and every service's
   log lines, with the network tunhub currently sees (gateway and subnet).
+- **Card order**: drag a card onto another one to move it. The order is kept
+  per machine (not in your YAML); *Restore card order* in the ⋯ menu goes
+  back to the order of `services.yaml`. New services appear at the end.
 - A per-machine state directory for things tunhub remembers by itself:
   `$XDG_STATE_HOME/tunhub` (Linux), `~/Library/Application Support/tunhub`
   (macOS), `%LOCALAPPDATA%\tunhub` (Windows); `TUNHUB_STATE_DIR` overrides

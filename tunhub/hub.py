@@ -85,6 +85,8 @@ class Hub:
         # an orphaned runtime holding a port.
         self._lifecycle_lock = asyncio.Lock()
         self.state = StateStore(config_dir)
+        # Read once: only this process changes it, and /api/state asks every poll.
+        self._card_order = self._stored_card_order()
         # Why the config files cannot be used right now (shown on the dashboard),
         # and whether some earlier version of them is in use.
         self.config_error: str | None = None
@@ -137,6 +139,38 @@ class Hub:
         }
         if self.state.get("hub") != hub:
             self.state.set("hub", hub)
+        # Services removed from the config drop out of the card order.
+        order = self.card_order()
+        if order is not None:
+            kept = [service_id for service_id in order if service_id in self.config.services]
+            if kept != order:
+                self.set_card_order(kept)
+
+    # ------------------------------------------------------------------
+    # Card order: chosen on the dashboard, kept in the state file
+
+    def _stored_card_order(self) -> list[str] | None:
+        order = self.state.get("order")
+        if not isinstance(order, list) or not all(isinstance(item, str) for item in order):
+            return None
+        return order or None
+
+    def card_order(self) -> list[str] | None:
+        """The ids in the order the user arranged them, or None for the config order."""
+        return self._card_order
+
+    def set_card_order(self, ids: list[str] | None) -> None:
+        """Remember the order of the cards; None or [] restores the config order."""
+        known = list(dict.fromkeys(i for i in ids or [] if i in self.config.services))
+        self._card_order = known or None
+        self.state.set("order", self._card_order)
+
+    def ordered_runtimes(self) -> list[ServiceRuntime]:
+        """The services in card order: arranged ones first, then the rest in config order."""
+        order = self.card_order() or []
+        position = {service_id: index for index, service_id in enumerate(order)}
+        runtimes = list(self.runtimes.values())
+        return sorted(runtimes, key=lambda runtime: position.get(runtime.service.id, len(order)))
 
     @property
     def warnings(self) -> list[str]:

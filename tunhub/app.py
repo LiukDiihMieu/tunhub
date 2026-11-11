@@ -26,6 +26,10 @@ class RouteChoice(BaseModel):
     route: int | None = None
 
 
+class CardOrder(BaseModel):
+    order: list[str] | None = None  # None: back to the config order
+
+
 def _is_trusted_fetch(request: Request) -> bool:
     """Whether a GET may come from the user rather than from another web page.
 
@@ -154,8 +158,10 @@ def create_app(hub: Hub) -> FastAPI:
                 },
                 "services": [
                     {**runtime.snapshot(), "icon_version": hub.icons.version(runtime.service)}
-                    for runtime in hub.runtimes.values()
+                    for runtime in hub.ordered_runtimes()
                 ],
+                # Whether the cards were arranged by hand (then they can be restored).
+                "custom_order": hub.card_order() is not None,
             },
             headers=NO_STORE,
         )
@@ -223,6 +229,11 @@ def create_app(hub: Hub) -> FastAPI:
             runtime_or_404(service_id).set_pinned_route(choice.route)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from None
+        return {"ok": True}
+
+    @app.post("/api/order")
+    async def card_order(choice: CardOrder) -> dict:
+        hub.set_card_order(choice.order)
         return {"ok": True}
 
     @app.post("/api/disconnect-ssh")
