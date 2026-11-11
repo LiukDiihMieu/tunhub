@@ -363,9 +363,6 @@ async function refreshLogs(scrollToEnd = false) {
 }
 
 $("d-close").addEventListener("click", closeDrawer);
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && drawerId) closeDrawer();
-});
 
 $("d-toggle").addEventListener("click", async () => {
   const service = drawerService();
@@ -608,9 +605,6 @@ menu.addEventListener("keydown", (event) => {
     event.preventDefault();
     const step = event.key === "ArrowDown" ? 1 : -1;
     items[(index + step + items.length) % items.length].focus();
-  } else if (event.key === "Escape") {
-    setMenuOpen(false);
-    menuButton.focus();
   }
 });
 
@@ -674,8 +668,18 @@ async function refreshEvents(scrollToEnd = false) {
 }
 
 $("e-close").addEventListener("click", closeEvents);
+
+// Esc closes only the topmost layer: the menu if it is open, else the side panel.
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && !eventsPanel.hidden && menu.hidden) closeEvents();
+  if (event.key !== "Escape") return;
+  if (!menu.hidden) {
+    setMenuOpen(false);
+    menuButton.focus();
+  } else if (!eventsPanel.hidden) {
+    closeEvents();
+  } else if (drawerId) {
+    closeDrawer();
+  }
 });
 
 let pollTimer = null;
