@@ -284,10 +284,16 @@ misconnections the way ssh handles host keys with `known_hosts`:
   all trusted. The file can be synced together with your config.
 
 This prevents accidents, not deliberate attacks: someone on the same network
-can fake a MAC. Targets reached through a VPN have no visible MAC and are used
-without this check. Give direct targets a fixed address (a static IP or a DHCP
+can fake a MAC. Give direct targets a fixed address (a static IP or a DHCP
 reservation): a running direct route is re-checked when the network changes,
 not when an address is handed to another machine on the same network.
+
+**Known limitation: direct routes over a VPN.** Through a VPN there is no
+next-hop MAC to see, and tunhub cannot tell your VPN from another one that
+routes the same private range elsewhere. So an address recorded on your LAN
+is not used directly while you are on a VPN: the tile shows ⚠ and the next
+route, usually ssh, is used instead. An address never recorded (seen only
+through a VPN) is used without the check.
 
 ## How does it compare?
 
