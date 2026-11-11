@@ -7,6 +7,7 @@ import ipaddress
 import logging
 import socket
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import Awaitable, Callable
 
@@ -99,6 +100,12 @@ class Hub:
             self.config_error = str(exc)
             logger.error("config: %s", exc)
         else:
+            remembered = self._remembered_hub()
+            if not self.config.found and remembered is not None:
+                # No services.yaml, yet a config worked here before: more likely a
+                # synced folder that is not there yet than a first start. Keep the
+                # dashboard (and its bookmarks) where it was.
+                self.config = replace(self.config, hub=remembered)
             self._config_loaded()
         # The listening address is fixed for the process lifetime.
         self.hub_settings: HubSettings = self.config.hub
@@ -116,18 +123,28 @@ class Hub:
         try:
             hub = load_hub_settings(self.config_dir, self.machine)
         except ConfigError:
-            remembered = self.state.get("hub")
-            try:
-                hub = parse_config({"hub": remembered}).hub if isinstance(remembered, dict) else None
-            except ConfigError:
-                hub = None
+            hub = self._remembered_hub()
             if hub is None:
                 raise error from None
             logger.warning("config: listening as the last working config did (%s:%s)", hub.listen_host, hub.port)
         return empty_config(self.config_dir, hub, self.machine)
 
+    def _remembered_hub(self) -> HubSettings | None:
+        """Where the dashboard listened with the last config that worked here."""
+        remembered = self.state.get("hub")
+        if not isinstance(remembered, dict):
+            return None
+        try:
+            return parse_config({"hub": remembered}).hub
+        except ConfigError:
+            return None
+
     def _config_loaded(self) -> None:
         self.config_error = None
+        if not self.config.found:
+            # No services.yaml: nothing to learn from. Remembering its defaults
+            # would forget the real dashboard address and the card order.
+            return
         self.config_loaded = True
         # Remembered so that a later start with broken files still listens here.
         settings = self.config.hub

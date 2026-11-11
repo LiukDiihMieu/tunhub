@@ -431,3 +431,38 @@ def test_reload_of_a_non_utf8_file_shows_the_error(setup):
     config = client.get("/api/state").json()["config"]
     assert "not UTF-8" in config["error"] and config["error_keeps_previous"] is True
     assert hub.get("web") is not None
+
+
+def test_missing_services_yaml_keeps_the_remembered_address_and_order(tmp_path):
+    # e.g. a synced folder that is not mounted yet when tunhub starts
+    port = free_port()
+    (tmp_path / "services.yaml").write_text(
+        f"hub: {{port: {port}}}\nservices:\n"
+        f"  a: {{local_port: {free_port()}, routes: [{{ssh: x, remote: 1}}]}}\n"
+        f"  b: {{local_port: {free_port()}, routes: [{{ssh: x, remote: 1}}]}}\n"
+    )
+    Hub(tmp_path).set_card_order(["b", "a"])
+    shared = (tmp_path / "services.yaml").read_text()
+    (tmp_path / "services.yaml").unlink()
+
+    hub = Hub(tmp_path)
+    assert hub.hub_settings.port == port  # not the default 1110
+    assert hub.card_order() == ["b", "a"]
+    assert hub.config_error is None and not hub.config.found
+
+    (tmp_path / "services.yaml").write_text(shared)  # the folder arrives
+    client = TestClient(create_app(hub), base_url=f"http://hub.localhost:{port}")
+    with client:
+        assert client.post("/api/reload", headers={"X-Tunhub": "1"}).status_code == 200
+        assert [s["id"] for s in client.get("/api/state").json()["services"]] == ["b", "a"]
+    from tunhub.state import StateStore
+
+    assert StateStore(tmp_path).get("hub")["port"] == port
+
+
+def test_first_start_without_any_config_uses_the_default_address(tmp_path):
+    hub = Hub(tmp_path)
+    assert hub.hub_settings.port == 1110 and not hub.config.found
+    from tunhub.state import StateStore
+
+    assert StateStore(tmp_path).get("hub") is None  # nothing learned from no file
