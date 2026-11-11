@@ -481,7 +481,8 @@ class ServiceRuntime:
             ip,
             route.target_port,
             connect_timeout=max(3.0, self.settings.probe_timeout * 3),
-            on_connect_error=self._on_relay_error,
+            # Tells which relay failed: `relay` is looked up when an error occurs.
+            on_connect_error=lambda exc: self._on_relay_error(relay, exc),
         )
         try:
             await relay.start()
@@ -540,7 +541,11 @@ class ServiceRuntime:
                 raise RouteFailed(f"tunnel is open but the web service does not answer ({detail})")
             await asyncio.sleep(0.5)
 
-    def _on_relay_error(self, exc: Exception) -> None:
+    def _on_relay_error(self, relay: TcpRelay, exc: Exception) -> None:
+        # A stopped relay can still finish a connection attempt it started
+        # (it waits up to connect_timeout); by then another route may be up.
+        if relay is not self._relay:
+            return
         detail = getattr(exc, "strerror", None) or str(exc) or type(exc).__name__
         self.log(f"relay could not reach target: {detail}")
         # Only a live route is torn down; during health checks errors are expected.
