@@ -54,7 +54,7 @@ tunnel:
 # Three examples, one per kind of setup. They use documentation addresses
 # (192.0.2.x, RFC 5737) and ssh aliases that do not exist, so they never reach
 # a real machine. Replace both with your own, then rename or delete freely
-# and choose "Reload config" in the dashboard's ⋯ menu.
+# and choose "Reload config" in the dashboard's menu (top right).
 services:
   # A web UI on your home network: direct at home, through ssh elsewhere.
   nas:
