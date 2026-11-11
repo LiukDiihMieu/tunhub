@@ -35,8 +35,20 @@
 
   <div id="banner" class="banner" hidden></div>
   <div id="offline" class="banner bad" role="alert" hidden></div>
-  <div id="config-warnings" class="banner warn" hidden>
-    <strong>Config warnings</strong> (fix the file, then Reload config)
+  <!-- The config files cannot be used; stays until a reload succeeds. -->
+  <div id="config-error" class="banner config-box bad" role="alert" hidden>
+    <div class="config-box-head">
+      <strong>Config error</strong>
+      <button class="btn small primary" data-reload>Reload config</button>
+    </div>
+    <pre id="config-error-text"></pre>
+    <p id="config-error-note"></p>
+  </div>
+  <div id="config-warnings" class="banner config-box warn" hidden>
+    <div class="config-box-head">
+      <span><strong>Config warnings</strong> (fix the file, then reload)</span>
+      <button class="btn small" data-reload>Reload config</button>
+    </div>
     <ul id="config-warnings-list"></ul>
   </div>
 
@@ -72,7 +84,7 @@
 
     <div class="setup-reload">
       <span>Save the file, then reload the configuration.</span>
-      <button class="btn primary" id="setup-reload">Reload config</button>
+      <button class="btn primary" data-reload>Reload config</button>
     </div>
   </section>
 

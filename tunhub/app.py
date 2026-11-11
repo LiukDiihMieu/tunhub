@@ -105,6 +105,15 @@ def create_app(hub: Hub) -> FastAPI:
         """Bookmark entry point: bring the service up, then redirect to it."""
         runtime = hub.get(service_id)
         if runtime is None:
+            if hub.config_error:  # the service may be in the files that cannot be loaded
+                return _error_page(
+                    "tunhub cannot use its configuration",
+                    hub.config_error,
+                    [],
+                    retry_url=f"/open/{service_id}",
+                    status=503,
+                    hint="Fix the file, reload the configuration on the dashboard, then retry.",
+                )
             return _error_page(f"Unknown service '{service_id}'", "", [], status=404)
 
         if await runtime.ensure_up(settings.open_timeout):
@@ -137,6 +146,10 @@ def create_app(hub: Hub) -> FastAPI:
                     "local_path": str(hub.config.local_path) if hub.config.local_path else None,
                     "local_found": hub.config.local_found,
                     "warnings": hub.warnings,
+                    # The files cannot be used: why, and whether an earlier
+                    # version of them is still in use.
+                    "error": hub.config_error,
+                    "error_keeps_previous": hub.config_loaded,
                 },
                 "services": [
                     {**runtime.snapshot(), "icon_version": hub.icons.version(runtime.service)}
@@ -210,11 +223,17 @@ def create_app(hub: Hub) -> FastAPI:
 
 
 def _error_page(
-    title: str, error: str, log_lines: list[str], retry_url: str | None = None, status: int = 502
+    title: str,
+    error: str,
+    log_lines: list[str],
+    retry_url: str | None = None,
+    status: int = 502,
+    hint: str = "",
 ) -> HTMLResponse:
     escape = html.escape
     retry = f'<a class="btn" href="{escape(retry_url)}">Retry</a>' if retry_url else ""
-    log_html = escape("\n".join(log_lines)) or "(no log)"
+    hint_html = f'<p class="muted">{escape(hint)}</p>' if hint else ""
+    log_html = f'<h2>Recent log</h2><pre class="log">{escape(chr(10).join(log_lines))}</pre>' if log_lines else ""
     body = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -223,7 +242,8 @@ def _error_page(
 </head><body><main class="error-page">
 <h1>{escape(title)}</h1>
 <p class="error">{escape(error)}</p>
+{hint_html}
 <div class="actions">{retry}<a class="btn ghost" href="/">Back to hub</a></div>
-<h2>Recent log</h2><pre class="log">{log_html}</pre>
+{log_html}
 </main></body></html>"""
     return HTMLResponse(body, status_code=status, headers=NO_STORE)

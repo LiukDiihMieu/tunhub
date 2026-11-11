@@ -98,3 +98,19 @@ def test_machine_name_on_macos_falls_back_to_host_name(os_name, monkeypatch):
 def test_machine_name_from_environment(monkeypatch):
     monkeypatch.setenv("TUNHUB_MACHINE", " Work-Laptop ")
     assert paths.machine_name() == "work-laptop"
+
+
+def test_state_dir_per_platform(clean_env, monkeypatch):
+    monkeypatch.delenv("TUNHUB_STATE_DIR", raising=False)
+    monkeypatch.delenv("XDG_STATE_HOME", raising=False)
+    monkeypatch.setattr(paths.sys, "platform", "linux")
+    assert paths.state_dir() == clean_env / ".local" / "state" / "tunhub"
+    monkeypatch.setenv("XDG_STATE_HOME", "/xdg/state")
+    assert paths.state_dir() == Path("/xdg/state/tunhub")
+    monkeypatch.setattr(paths.sys, "platform", "darwin")
+    assert paths.state_dir() == clean_env / "Library" / "Application Support" / "tunhub"
+    monkeypatch.setattr(paths.sys, "platform", "win32")
+    monkeypatch.setenv("LOCALAPPDATA", str(clean_env / "Local"))
+    assert paths.state_dir() == clean_env / "Local" / "tunhub"
+    monkeypatch.setenv("TUNHUB_STATE_DIR", "/elsewhere")
+    assert paths.state_dir() == Path("/elsewhere")

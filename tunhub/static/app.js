@@ -342,6 +342,7 @@ $("d-refresh-icon").addEventListener("click", async () => {
 
 /** Where the config lives; a setup guide while no service is configured. */
 function renderSetup(config, empty) {
+  empty = empty && !config.error; // a broken file is not "no services yet"
   $("reload").title = config.local_found
     ? `Re-read ${config.path}\nand ${config.local_path}`
     : `Re-read ${config.path}\n(no ${config.local_path || "local file"} for this machine)`;
@@ -353,6 +354,18 @@ function renderSetup(config, empty) {
   $("setup-path").textContent = config.path;
   $("setup-init").textContent = config.init_command;
   $("setup-create").hidden = config.found;
+}
+
+/** The files cannot be used; tunhub runs with the last working config, or without services. */
+function renderConfigError(config) {
+  $("config-error").hidden = !config.error;
+  if (!config.error) return;
+  if ($("config-error-text").textContent !== config.error) {
+    $("config-error-text").textContent = config.error; // keep a text selection across polls
+  }
+  $("config-error-note").textContent = config.error_keeps_previous
+    ? "tunhub keeps using the last working configuration. Fix the file, then reload."
+    : "No services are loaded until the file is fixed. Fix it, then reload.";
 }
 
 /** Problems that do not stop tunhub, such as an unknown key; gone after a fixed Reload. */
@@ -381,7 +394,9 @@ for (const [button, [source, message]] of Object.entries(copyButtons)) {
     toast(message);
   });
 }
-$("setup-reload").addEventListener("click", () => $("reload").click());
+for (const button of document.querySelectorAll("[data-reload]")) {
+  button.addEventListener("click", reloadConfig);
+}
 
 // --------------------------------------------------------------- favicon
 
@@ -448,6 +463,7 @@ async function poll() {
   setOffline(false);
   hubUrl = data.hub;
   renderSetup(data.config, data.services.length === 0);
+  renderConfigError(data.config);
   renderWarnings(data.config.warnings);
   $("machine").textContent = `on ${data.machine}`;
   $("machine").title = `This machine's overrides: local.${data.machine}.yaml`;
@@ -491,15 +507,18 @@ $("disconnect-ssh").addEventListener("click", async () => {
   poll();
 });
 
-$("reload").addEventListener("click", async () => {
+async function reloadConfig() {
   try {
     const result = await api("/api/reload");
     showBanner(`Config reloaded: ${result.messages.join(", ")}`);
   } catch (err) {
-    showBanner(`Reload failed, old config kept:\n${err.message}`, true);
+    // A rejected config shows up in the error box (details there); anything
+    // else, e.g. tunhub not running, has no box to look at.
+    toast(err instanceof TypeError ? `Reload failed: ${err.message}` : "Reload failed: see the config error");
   }
   poll();
-});
+}
+$("reload").addEventListener("click", reloadConfig);
 
 let pollTimer = null;
 

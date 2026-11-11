@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- A configuration error no longer stops tunhub: the dashboard starts anyway
+  and shows the error in a red box, with a *Reload config* button, until the
+  file is fixed (bookmarks show it too). tunhub listens where the `hub:`
+  section says, or, if the files cannot be read at all, where the last
+  working configuration did. `tunhub run` exits with code 2 only when
+  neither is known.
+- The config error and warning boxes have their own *Reload config* button.
+
+### Added
+
+- A per-machine state directory for things tunhub remembers by itself:
+  `$XDG_STATE_HOME/tunhub` (Linux), `~/Library/Application Support/tunhub`
+  (macOS), `%LOCALAPPDATA%\tunhub` (Windows); `TUNHUB_STATE_DIR` overrides
+  it.
+
 ## 0.2.0 — 2026-11-10
 
 Settling the parts that should stay stable in the long term (configuration,

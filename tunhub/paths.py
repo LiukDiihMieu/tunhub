@@ -1,10 +1,11 @@
-"""Per-platform locations for config, cache and log files.
+"""Per-platform locations for config, state, cache and log files.
 
-| kind   | Linux                         | macOS                        | Windows                         |
-|--------|-------------------------------|------------------------------|---------------------------------|
-| config | $XDG_CONFIG_HOME/tunhub       | ~/.config/tunhub             | %APPDATA%\\tunhub               |
-| cache  | $XDG_CACHE_HOME/tunhub        | ~/Library/Caches/tunhub      | %LOCALAPPDATA%\\tunhub          |
-| log    | (journald via systemd)        | ~/Library/Logs/tunhub.log    | %LOCALAPPDATA%\\tunhub\\tunhub.log |
+| kind   | Linux                         | macOS                               | Windows                         |
+|--------|-------------------------------|-------------------------------------|---------------------------------|
+| config | $XDG_CONFIG_HOME/tunhub       | ~/.config/tunhub                    | %APPDATA%\\tunhub               |
+| state  | $XDG_STATE_HOME/tunhub        | ~/Library/Application Support/tunhub | %LOCALAPPDATA%\\tunhub          |
+| cache  | $XDG_CACHE_HOME/tunhub        | ~/Library/Caches/tunhub             | %LOCALAPPDATA%\\tunhub          |
+| log    | (journald via systemd)        | ~/Library/Logs/tunhub.log           | %LOCALAPPDATA%\\tunhub\\tunhub.log |
 
 macOS uses ~/.config like most CLI tools, so the config is easy to find and to
 keep in a dotfiles repo.
@@ -22,6 +23,7 @@ from pathlib import Path
 APP_NAME = "tunhub"
 CONFIG_DIR_ENV = "TUNHUB_CONFIG_DIR"
 CACHE_DIR_ENV = "TUNHUB_CACHE_DIR"
+STATE_DIR_ENV = "TUNHUB_STATE_DIR"
 MACHINE_ENV = "TUNHUB_MACHINE"
 
 
@@ -67,6 +69,17 @@ def default_config_dir() -> Path:
     if sys.platform == "darwin":
         return Path.home() / ".config" / APP_NAME
     return _env_path("XDG_CONFIG_HOME", Path.home() / ".config") / APP_NAME
+
+
+def state_dir() -> Path:
+    """tunhub's own per-machine state (e.g. the card order): never synced, safe to lose."""
+    if os.environ.get(STATE_DIR_ENV):
+        return Path(os.environ[STATE_DIR_ENV])
+    if sys.platform == "win32":
+        return _env_path("LOCALAPPDATA", Path.home() / "AppData" / "Local") / APP_NAME
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / APP_NAME
+    return _env_path("XDG_STATE_HOME", Path.home() / ".local" / "state") / APP_NAME
 
 
 def cache_dir() -> Path:

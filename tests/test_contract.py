@@ -340,8 +340,9 @@ def test_exit_codes(tmp_path, monkeypatch, capsys):
         main(["no-such-command"])
     assert exc.value.code == 2
 
-    (tmp_path / "services.yaml").write_text("requires_tunhub: '>=999'\n")
-    assert main(["run", "--config-dir", str(tmp_path)]) == 2  # configuration error
+    # A config error that leaves nowhere to listen (other errors are shown on the dashboard).
+    (tmp_path / "services.yaml").write_text("hub: {port: 0}\n")
+    assert main(["run", "--config-dir", str(tmp_path)]) == 2
 
     monkeypatch.setattr(autostart, "status", lambda: "")
     monkeypatch.setattr(autostart, "installed", lambda: True)

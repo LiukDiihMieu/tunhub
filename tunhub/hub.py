@@ -9,12 +9,24 @@ import socket
 from pathlib import Path
 from typing import Awaitable, Callable
 
-from .config import SHARED_FILE, Config, ConfigError, HubSettings, Service, TunnelSettings, load_config
+from .config import (
+    SHARED_FILE,
+    Config,
+    ConfigError,
+    HubSettings,
+    Service,
+    TunnelSettings,
+    empty_config,
+    load_config,
+    load_hub_settings,
+    parse_config,
+)
 from .icons import IconStore
 from .known_macs import FILE_NAME as KNOWN_MACS_FILE
 from .known_macs import KnownMacs, MacGuard
 from .nexthop import NetworkFingerprint, network_fingerprint, next_hop_mac
 from .service import Mode, ServiceRuntime
+from .state import StateStore
 
 logger = logging.getLogger("tunhub")
 
@@ -65,7 +77,20 @@ class Hub:
         # Reload and shutdown replace runtimes; running two at once would leave
         # an orphaned runtime holding a port.
         self._lifecycle_lock = asyncio.Lock()
-        self.config: Config = load_config(config_dir, self.machine)
+        self.state = StateStore(config_dir)
+        # Why the config files cannot be used right now (shown on the dashboard),
+        # and whether some earlier version of them is in use.
+        self.config_error: str | None = None
+        self.config_loaded = False
+        try:
+            self.config: Config = load_config(config_dir, self.machine)
+        except ConfigError as exc:
+            # Start anyway, so that the dashboard can show the error.
+            self.config = self._config_without_services(exc)
+            self.config_error = str(exc)
+            logger.error("config: %s", exc)
+        else:
+            self._config_loaded()
         # The listening address is fixed for the process lifetime.
         self.hub_settings: HubSettings = self.config.hub
         self.runtimes: dict[str, ServiceRuntime] = {
@@ -73,6 +98,38 @@ class Hub:
             for service_id, service in self.config.services.items()
         }
         _log_warnings(self.config.warnings)
+
+    def _config_without_services(self, error: ConfigError) -> Config:
+        """Listen where the files say, or where the last working config did.
+
+        Re-raises `error` when neither is known: then there is nowhere to listen.
+        """
+        try:
+            hub = load_hub_settings(self.config_dir, self.machine)
+        except ConfigError:
+            remembered = self.state.get("hub")
+            try:
+                hub = parse_config({"hub": remembered}).hub if isinstance(remembered, dict) else None
+            except ConfigError:
+                hub = None
+            if hub is None:
+                raise error from None
+            logger.warning("config: listening as the last working config did (%s:%s)", hub.listen_host, hub.port)
+        return empty_config(self.config_dir, hub, self.machine)
+
+    def _config_loaded(self) -> None:
+        self.config_error = None
+        self.config_loaded = True
+        # Remembered so that a later start with broken files still listens here.
+        settings = self.config.hub
+        hub = {
+            "listen": settings.listen_host,
+            "port": settings.port,
+            "hostname": settings.hostname,
+            "open_timeout": settings.open_timeout,
+        }
+        if self.state.get("hub") != hub:
+            self.state.set("hub", hub)
 
     @property
     def warnings(self) -> list[str]:
@@ -200,7 +257,13 @@ class Hub:
         Raises ConfigError (and keeps the old config) if the new files are invalid.
         """
         async with self._lifecycle_lock:
-            return await self._reload()
+            try:
+                messages = await self._reload()
+            except ConfigError as exc:
+                self.config_error = str(exc)
+                raise
+            self._config_loaded()
+            return messages
 
     async def _reload(self) -> list[str]:
         new_config = load_config(self.config_dir, self.machine)
