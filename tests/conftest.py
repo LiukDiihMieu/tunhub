@@ -11,3 +11,9 @@ def isolated_icon_cache(tmp_path, monkeypatch):
 def fixed_machine_name(monkeypatch):
     """Tests read local.testbox.yaml, whatever this machine is called."""
     monkeypatch.setenv("TUNHUB_MACHINE", "testbox")
+
+
+@pytest.fixture(autouse=True)
+def isolated_state_dir(tmp_path, monkeypatch):
+    """Never touch the real per-user state (card order, last dashboard address)."""
+    monkeypatch.setenv("TUNHUB_STATE_DIR", str(tmp_path / "state"))

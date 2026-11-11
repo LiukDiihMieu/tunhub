@@ -197,7 +197,10 @@ differences out of `services.yaml`:
 Click **Reload config** in the dashboard after editing. Services whose
 definition did not change keep their connections. Changes to the `hub:`
 section need a restart. Problems that do not stop tunhub, such as a misspelt
-key, are shown in a yellow box on the dashboard until you fix them.
+key, are shown in a yellow box on the dashboard until you fix them. An
+invalid file is shown in a red box: tunhub keeps the last working
+configuration (or, at startup, runs without services) until a reload
+succeeds.
 
 <details>
 <summary>Running tunhub on the machine that hosts a service</summary>

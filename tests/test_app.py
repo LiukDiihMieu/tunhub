@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from tunhub.app import create_app
+from tunhub.config import ConfigError
 from tunhub.hub import Hub
 from tunhub.service import Mode
 
@@ -300,3 +301,60 @@ def test_state_names_the_machine_and_its_local_file(setup):
     assert config["machine"] == "testbox"
     assert config["config"]["local_path"] == str(hub.config_dir / "local.testbox.yaml")
     assert config["config"]["local_found"] is False
+
+
+# ---------------------------------------------------------------------------
+# Config errors are shown on the dashboard
+
+
+def test_invalid_config_still_starts_and_shows_the_error(tmp_path):
+    port = free_port()
+    (tmp_path / "services.yaml").write_text(f"requires_tunhub: '>=999'\nhub: {{port: {port}}}\n")
+    hub = Hub(tmp_path)
+    assert hub.hub_settings.port == port  # the hub: section still decides where to listen
+    client = TestClient(create_app(hub), base_url=f"http://hub.localhost:{port}", follow_redirects=False)
+    with client:
+        state = client.get("/api/state").json()
+        assert state["services"] == []
+        assert "please upgrade" in state["config"]["error"]
+        assert state["config"]["error_keeps_previous"] is False
+
+        page = client.get("/open/nas")
+        assert page.status_code == 503 and "please upgrade" in page.text
+
+        (tmp_path / "services.yaml").write_text(
+            f"hub: {{port: {port}}}\nservices:\n  web: {{local_port: {free_port()}, routes: [{{ssh: x, remote: 1}}]}}\n"
+        )
+        assert client.post("/api/reload", headers={"X-Tunhub": "1"}).status_code == 200
+        state = client.get("/api/state").json()
+        assert state["config"]["error"] is None and [s["id"] for s in state["services"]] == ["web"]
+
+
+def test_failed_reload_keeps_the_old_config_and_shows_the_error(setup):
+    client, hub, _, write_config = setup
+    write_config("    bad_key_level: [")  # not YAML
+    assert client.post("/api/reload", headers={"X-Tunhub": "1"}).status_code == 400
+    config = client.get("/api/state").json()["config"]
+    assert config["error"] and config["error_keeps_previous"] is True
+    assert hub.get("web") is not None
+
+    write_config()
+    assert client.post("/api/reload", headers={"X-Tunhub": "1"}).status_code == 200
+    assert client.get("/api/state").json()["config"]["error"] is None
+
+
+def test_unreadable_files_use_the_last_working_dashboard_address(tmp_path):
+    port = free_port()
+    (tmp_path / "services.yaml").write_text(f"hub: {{port: {port}, hostname: tunhub.localhost}}\n")
+    Hub(tmp_path)  # a working start remembers where the dashboard listens
+
+    (tmp_path / "services.yaml").write_text("hub: {port: [\n")  # not YAML
+    hub = Hub(tmp_path)
+    assert (hub.hub_settings.port, hub.hub_settings.hostname) == (port, "tunhub.localhost")
+    assert hub.config_error and not hub.config_loaded
+
+
+def test_unreadable_files_without_a_remembered_address_cannot_start(tmp_path):
+    (tmp_path / "services.yaml").write_text("hub: {port: [\n")
+    with pytest.raises(ConfigError):
+        Hub(tmp_path)

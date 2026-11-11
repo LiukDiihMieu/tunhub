@@ -99,6 +99,13 @@ body {
 }
 .banner.bad { border-color: var(--bad); color: var(--bad); }
 .banner.warn { border-color: var(--warn); white-space: normal; }
+/* Config error and warnings: a title line with a Reload button, then the details. */
+.config-box { white-space: normal; }
+.config-box-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.banner.bad.config-box { color: inherit; }
+.banner.bad.config-box strong { color: var(--bad); }
+#config-error-text { margin: 8px 0 6px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
+#config-error-note { margin: 0; color: var(--muted); }
 .banner.warn strong { color: var(--warn); }
 .banner.warn ul { margin: 6px 0 0; padding-left: 20px; overflow-wrap: anywhere; }
 /* tunhub is not answering: the tiles show a stale state. */

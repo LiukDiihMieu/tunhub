@@ -188,34 +188,59 @@ class Config:
 
 def load_config(config_dir: Path, machine: str | None = None) -> Config:
     """Read services.yaml (+ local.<machine>.yaml). A missing services.yaml is an empty config."""
-    shared_path = config_dir / SHARED_FILE
-    found = shared_path.exists()
-    raw = _read_yaml(shared_path) if found else {}
-    shared_warnings = _shared_file_warnings(raw)
-
-    machine = machine_name() if machine is None else normalize_machine_name(machine)
-    local_path: Path | None = None
-    local_found = False
-    if _usable_machine_name(machine):
-        local_path = config_dir / local_file_name(machine)
-        local_found = local_path.exists()
-        if local_found:
-            raw = deep_merge(raw, _read_yaml(local_path))
-    else:
+    files = _ConfigFiles(config_dir, machine)
+    raw = files.read()
+    shared_warnings = _shared_file_warnings(files.shared_raw)
+    if files.local_path is None:
         shared_warnings.append(
-            f"machine name {machine!r} cannot be used in a file name, so no {LOCAL_FILE} is read; "
+            f"machine name {files.machine!r} cannot be used in a file name, so no {LOCAL_FILE} is read; "
             f"set {MACHINE_ENV} to a simple name"
         )
-
     config = parse_config(raw)
-    return replace(
-        config,
-        found=found,
-        warnings=config.warnings + tuple(shared_warnings),
-        machine=machine,
-        local_path=local_path,
-        local_found=local_found,
-    )
+    return files.describe(replace(config, warnings=config.warnings + tuple(shared_warnings)))
+
+
+def load_hub_settings(config_dir: Path, machine: str | None = None) -> HubSettings:
+    """Only the hub: section, for a dashboard that shows why the rest is invalid.
+
+    Raises ConfigError if the files cannot be read or the section is invalid.
+    """
+    raw = _ConfigFiles(config_dir, machine).read()
+    return _parse_hub(_mapping(raw.get("hub"), "hub"))
+
+
+def empty_config(config_dir: Path, hub: HubSettings, machine: str | None = None) -> Config:
+    """A config without services that listens like `hub`: used while the files are invalid."""
+    files = _ConfigFiles(config_dir, machine)
+    return files.describe(replace(parse_config({}), hub=hub))
+
+
+class _ConfigFiles:
+    """Which files make up the config of one machine, and how they merge."""
+
+    def __init__(self, config_dir: Path, machine: str | None) -> None:
+        self.shared_path = config_dir / SHARED_FILE
+        self.found = self.shared_path.exists()
+        self.machine = machine_name() if machine is None else normalize_machine_name(machine)
+        self.local_path = config_dir / local_file_name(self.machine) if _usable_machine_name(self.machine) else None
+        self.local_found = self.local_path is not None and self.local_path.exists()
+        self.shared_raw: dict[str, Any] = {}
+
+    def read(self) -> dict[str, Any]:
+        """The merged raw YAML. Raises ConfigError for a file that cannot be read."""
+        self.shared_raw = _read_yaml(self.shared_path) if self.found else {}
+        if self.local_found:
+            return deep_merge(self.shared_raw, _read_yaml(self.local_path))
+        return self.shared_raw
+
+    def describe(self, config: Config) -> Config:
+        return replace(
+            config,
+            found=self.found,
+            machine=self.machine,
+            local_path=self.local_path,
+            local_found=self.local_found,
+        )
 
 
 def _usable_machine_name(machine: str) -> bool:

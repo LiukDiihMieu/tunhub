@@ -118,8 +118,11 @@ yet and ignores it; every later release checks it.
   |---|---|
   | 0 | success; `service status`: installed |
   | 1 | the operation could not be done; `service status`: not installed |
-  | 2 | invalid arguments or configuration |
+  | 2 | invalid arguments, or a configuration that leaves `tunhub run` nowhere to listen |
 
+- `tunhub run` with an invalid configuration still starts and shows the
+  error on the dashboard, as long as it knows where to listen (the `hub:`
+  section, or the last configuration that worked on this machine).
 - Output text is **not** stable; do not parse it.
 
 ### Start at login
@@ -155,6 +158,8 @@ yet and ignores it; every later release checks it.
   rules.
 - Timing: probe intervals, back-off, the network-change check.
 - The cache directory (`TUNHUB_CACHE_DIR`; icons) and its layout.
+- The state directory (`TUNHUB_STATE_DIR`: the card order, the last working
+  dashboard address) and its file format.
 - Everything in the login entry other than the names and command above.
 - Python modules and functions: tunhub is an application, not a library.
 
