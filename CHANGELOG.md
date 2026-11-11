@@ -11,9 +11,14 @@
   working configuration did. `tunhub run` exits with code 2 only when
   neither is known.
 - The config error and warning boxes have their own *Reload config* button.
+- The top bar keeps only *Disconnect SSH*; *Reload config* moved into a new
+  **⋯** menu, which also offers *Copy config path* and *Events*.
 
 ### Added
 
+- **Events** panel (⋯ menu): the recent events of tunhub as a whole, such as
+  network changes, reloads, config warnings and errors, and every service's
+  log lines, with the network tunhub currently sees (gateway and subnet).
 - A per-machine state directory for things tunhub remembers by itself:
   `$XDG_STATE_HOME/tunhub` (Linux), `~/Library/Application Support/tunhub`
   (macOS), `%LOCALAPPDATA%\tunhub` (Windows); `TUNHUB_STATE_DIR` overrides

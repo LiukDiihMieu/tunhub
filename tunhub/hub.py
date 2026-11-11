@@ -6,6 +6,7 @@ import asyncio
 import ipaddress
 import logging
 import socket
+import time
 from pathlib import Path
 from typing import Awaitable, Callable
 
@@ -21,6 +22,7 @@ from .config import (
     load_hub_settings,
     parse_config,
 )
+from .events import event_log
 from .icons import IconStore
 from .known_macs import FILE_NAME as KNOWN_MACS_FILE
 from .known_macs import KnownMacs, MacGuard
@@ -68,6 +70,11 @@ class Hub:
         self.icons = IconStore(config_dir, cache_dir)
         self.guard = MacGuard(KnownMacs(config_dir / KNOWN_MACS_FILE), mac_lookup)
         self._fingerprint = fingerprint
+        self.events = event_log()
+        # The network as the watcher last saw it (None: unknown), and since when;
+        # network_since is None until the first check.
+        self.network: NetworkFingerprint | None = None
+        self.network_since: float | None = None
         self._resolve = resolve
         # Host names that do not lead to this machine; found in the background
         # after each (re)load, for the config they were computed from.
@@ -223,6 +230,8 @@ class Hub:
                 changed = not first and current != last
                 if changed:
                     logger.info("network: changed to %s; re-verifying direct routes", current)
+            if first or current != last:
+                self.network, self.network_since = current, time.time()
             if changed:
                 await asyncio.gather(*(self._reverify(runtime) for runtime in list(self.runtimes.values())))
             last, first = current, False

@@ -140,6 +140,7 @@ def create_app(hub: Hub) -> FastAPI:
                 "hub": f"http://{settings.hostname}:{settings.port}",
                 # Where to edit the services, and whether the file exists yet.
                 "config": {
+                    "dir": str(hub.config_dir),
                     "path": str(hub.config_dir / SHARED_FILE),
                     "found": hub.config.found,
                     "init_command": init_command,
@@ -154,6 +155,23 @@ def create_app(hub: Hub) -> FastAPI:
                 "services": [
                     {**runtime.snapshot(), "icon_version": hub.icons.version(runtime.service)}
                     for runtime in hub.runtimes.values()
+                ],
+            },
+            headers=NO_STORE,
+        )
+
+    @app.get("/api/events")
+    async def events() -> JSONResponse:
+        network = hub.network
+        return JSONResponse(
+            {
+                "network": None
+                if network is None
+                else {"gateway": network.gateway_ip, "gateway_mac": network.gateway_mac, "subnet": network.local_subnet},
+                # None: not checked yet.
+                "network_since": hub.network_since,
+                "events": [
+                    {"time": t, "level": level, "message": message} for t, level, message in list(hub.events.entries)
                 ],
             },
             headers=NO_STORE,
