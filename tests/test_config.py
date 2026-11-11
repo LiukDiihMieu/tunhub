@@ -418,8 +418,17 @@ def test_known_keys_give_no_warnings(tmp_path):
     from importlib import resources
 
     template = resources.files("tunhub") / "templates" / "services.yaml"
-    (tmp_path / "services.yaml").write_text(template.read_text(encoding="utf-8"))
+    (tmp_path / "services.yaml").write_text(template.read_text(encoding="utf-8"), encoding="utf-8")
     assert load_config(tmp_path).warnings == ()
+
+
+@pytest.mark.parametrize("name", ["services.yaml", "local.example.yaml"])
+def test_templates_are_ascii(name):
+    # Users edit these with any editor; one that saves in a legacy code page
+    # (e.g. Notepad in ANSI) would turn non-ASCII into a "not UTF-8" error.
+    from importlib import resources
+
+    (resources.files("tunhub") / "templates" / name).read_bytes().decode("ascii")
 
 
 def test_loopback_direct_route_in_shared_file_is_a_warning(tmp_path):
