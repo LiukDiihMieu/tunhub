@@ -9,8 +9,10 @@ const container = document.getElementById("services");
 const template = document.getElementById("tile-template");
 const drawer = document.getElementById("drawer");
 const $ = (id) => document.getElementById(id);
+const eventsPanel = $("events");
 
 let hubUrl = location.origin;
+let configDir = "";
 let drawerId = null; // service shown in the drawer
 let drawerIconKey = null;
 let drawerRoutesKey = null;
@@ -209,6 +211,7 @@ function updateTile(tile, service) {
 let drawerTrigger = null;
 
 function openDrawer(id, trigger = null) {
+  if (!eventsPanel.hidden) eventsPanel.hidden = true; // one side panel at a time
   drawerId = id;
   drawerTrigger = trigger;
   drawerIconKey = null;
@@ -343,9 +346,11 @@ $("d-refresh-icon").addEventListener("click", async () => {
 /** Where the config lives; a setup guide while no service is configured. */
 function renderSetup(config, empty) {
   empty = empty && !config.error; // a broken file is not "no services yet"
-  $("reload").title = config.local_found
-    ? `Re-read ${config.path}\nand ${config.local_path}`
-    : `Re-read ${config.path}\n(no ${config.local_path || "local file"} for this machine)`;
+  configDir = config.dir;
+  const localName = config.local_path ? config.local_path.split(/[\\/]/).pop() : "local file";
+  $("m-reload-files").textContent = config.local_found
+    ? `services.yaml + ${localName}`
+    : `services.yaml (no ${localName} for this machine)`;
   $("setup").hidden = !empty;
   if (!empty) return;
   $("setup-lead").textContent = config.found
@@ -495,6 +500,7 @@ async function poll() {
     updateDrawer();
     refreshLogs();
   }
+  refreshEvents();
 }
 
 $("disconnect-ssh").addEventListener("click", async () => {
@@ -518,7 +524,99 @@ async function reloadConfig() {
   }
   poll();
 }
-$("reload").addEventListener("click", reloadConfig);
+// ------------------------------------------------------------------- menu
+
+const menu = $("menu");
+const menuButton = $("menu-button");
+
+function setMenuOpen(open) {
+  menu.hidden = !open;
+  menuButton.setAttribute("aria-expanded", String(open));
+  if (open) menu.querySelector("button").focus();
+}
+
+menuButton.addEventListener("click", () => setMenuOpen(menu.hidden));
+// Any choice closes the menu; clicks elsewhere close it too.
+menu.addEventListener("click", () => setMenuOpen(false));
+document.addEventListener("click", (event) => {
+  if (!menu.hidden && !event.target.closest(".menu-wrap")) setMenuOpen(false);
+});
+menu.addEventListener("keydown", (event) => {
+  const items = [...menu.querySelectorAll("button")];
+  const index = items.indexOf(document.activeElement);
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    const step = event.key === "ArrowDown" ? 1 : -1;
+    items[(index + step + items.length) % items.length].focus();
+  } else if (event.key === "Escape") {
+    setMenuOpen(false);
+    menuButton.focus();
+  }
+});
+
+$("m-copy-path").addEventListener("click", async () => {
+  await copyText(configDir);
+  toast("Config path copied");
+});
+$("m-events").addEventListener("click", openEvents);
+
+// ----------------------------------------------------------------- events
+
+function openEvents() {
+  if (drawerId) closeDrawer();
+  eventsPanel.hidden = false;
+  refreshEvents(true);
+  $("e-title").focus({ preventScroll: true });
+}
+
+function closeEvents() {
+  eventsPanel.hidden = true;
+  menuButton.focus({ preventScroll: true });
+}
+
+function timeOf(seconds) {
+  return new Date(seconds * 1000).toLocaleTimeString();
+}
+
+function networkText(data) {
+  if (data.network_since === null) return "Not checked yet";
+  const since = `since ${timeOf(data.network_since)}`;
+  if (!data.network) return `Unknown (no gateway found), ${since}`;
+  return `Gateway ${data.network.gateway} on ${data.network.subnet}, ${since}`;
+}
+
+async function refreshEvents(scrollToEnd = false) {
+  if (eventsPanel.hidden) return;
+  let data;
+  try {
+    const response = await fetch("/api/events");
+    data = await response.json();
+  } catch {
+    return; // the offline banner already says so
+  }
+  $("e-network").textContent = networkText(data);
+  const pre = $("e-log");
+  const atBottom = scrollToEnd || pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 4;
+  const key = data.events.length ? `${data.events.length}:${data.events.at(-1).time}` : "";
+  if (key !== refreshEvents.shown) {
+    refreshEvents.shown = key; // keep a text selection while nothing changes
+    pre.replaceChildren(
+      ...data.events.map((e) => {
+        const line = document.createElement("div");
+        line.className = e.level;
+        line.textContent = `${timeOf(e.time)}  ${e.message}`;
+        return line;
+      }),
+    );
+    if (!data.events.length) pre.textContent = "(empty)";
+  }
+  if (atBottom) pre.scrollTop = pre.scrollHeight;
+}
+
+$("e-close").addEventListener("click", closeEvents);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !eventsPanel.hidden && menu.hidden) closeEvents();
+});
 
 let pollTimer = null;
 

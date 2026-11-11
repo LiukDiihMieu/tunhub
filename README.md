@@ -194,7 +194,7 @@ differences out of `services.yaml`:
 - A port that is taken on one machine, or a service that one machine should
   not show (`enabled: false`), goes into that machine's local file.
 
-Click **Reload config** in the dashboard after editing. Services whose
+After editing, choose **Reload config** in the dashboard's **⋯** menu (top right). Services whose
 definition did not change keep their connections. Changes to the `hub:`
 section need a restart. Problems that do not stop tunhub, such as a misspelt
 key, are shown in a yellow box on the dashboard until you fix them. An

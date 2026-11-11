@@ -29,7 +29,17 @@
     <div class="topbar-actions">
       <span id="summary" class="muted"></span>
       <button id="disconnect-ssh" class="btn ghost stop" title="Stop every service using ssh; direct connections stay up" disabled>Disconnect SSH</button>
-      <button id="reload" class="btn ghost">Reload config</button>
+      <div class="menu-wrap">
+        <button id="menu-button" class="more menu-button" aria-haspopup="menu" aria-expanded="false" aria-controls="menu" aria-label="Menu" title="Menu">⋯</button>
+        <div id="menu" class="menu" role="menu" hidden>
+          <button role="menuitem" id="m-reload" data-reload>
+            Reload config
+            <small id="m-reload-files" class="muted"></small>
+          </button>
+          <button role="menuitem" id="m-copy-path">Copy config path</button>
+          <button role="menuitem" id="m-events">Events</button>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -39,7 +49,7 @@
   <div id="config-error" class="banner config-box bad" role="alert" hidden>
     <div class="config-box-head">
       <strong>Config error</strong>
-      <button class="btn small primary" data-reload>Reload config</button>
+      <button class="btn small" data-reload>Reload config</button>
     </div>
     <pre id="config-error-text"></pre>
     <p id="config-error-note"></p>
@@ -107,6 +117,20 @@
       <button class="btn small stop" hidden title="End this connection and go back to auto">Stop</button>
     </article>
   </template>
+
+  <!-- Events: what tunhub as a whole did recently, and the network it sees. -->
+  <aside id="events" class="drawer" hidden aria-label="Events">
+    <div class="drawer-head">
+      <div class="drawer-title"><h2 id="e-title" tabindex="-1">Events</h2></div>
+      <button class="more" id="e-close" aria-label="Close" title="Close (Esc)">✕</button>
+    </div>
+    <dl class="fields">
+      <dt>Network</dt>
+      <dd id="e-network" class="muted"></dd>
+    </dl>
+    <h3>Recent events</h3>
+    <pre id="e-log" class="log"></pre>
+  </aside>
 
   <!-- Details drawer: everything that is not needed every day. -->
   <aside id="drawer" class="drawer" hidden aria-label="Service details">

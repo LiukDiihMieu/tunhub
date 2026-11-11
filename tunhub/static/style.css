@@ -89,6 +89,41 @@ body {
 .logo-node { fill: var(--logo-node); }
 .topbar-actions { display: flex; align-items: center; gap: 12px; }
 
+/* The ⋯ menu: actions that are not needed every day. */
+.menu-wrap { position: relative; }
+/* In the top bar's flow, unlike the ⋯ in a tile's corner (.more is absolute). */
+.more.menu-button { position: static; display: block; }
+.menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.menu button {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.menu button:hover, .menu button:focus-visible { background: var(--surface-hover); outline: none; }
+.menu small { font-size: 11px; overflow-wrap: anywhere; white-space: pre-line; }
+
 .banner {
   margin: 16px 24px 0;
   padding: 10px 14px;
@@ -351,6 +386,9 @@ select {
 }
 .identity-warn { color: var(--warn); font-weight: 700; cursor: help; }
 
+#e-log .warning, #e-log .error { font-weight: 600; }
+#e-log .warning { color: var(--warn); }
+#e-log .error { color: var(--bad); }
 .log {
   flex: 1;
   min-height: 160px;
